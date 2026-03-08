@@ -34,4 +34,4 @@ VOLUME ["/app/data"]
 USER nextjs
 EXPOSE 3000
 
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node prisma/seed-prod.js && node server.js"]
+CMD ["sh", "-c", "npx prisma db push --skip-generate && node prisma/seed-prod.js && node server.js"]
