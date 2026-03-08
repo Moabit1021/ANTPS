@@ -3,7 +3,7 @@
 import { use, useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Pencil, Save, X, Trash2, Loader2, Copy, Check, RefreshCw, History } from "lucide-react"
+import { ArrowLeft, Pencil, Save, X, Trash2, Loader2, Copy, Check, RefreshCw, History, Volume2 } from "lucide-react"
 
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -95,6 +95,9 @@ export default function ScriptDetailPage({
   // Revision state
   const [revisionInstructions, setRevisionInstructions] = useState("")
   const [revising, setRevising] = useState(false)
+
+  // Audio generation state
+  const [generatingAudio, setGeneratingAudio] = useState(false)
 
   const fetchScript = useCallback(async (scriptId: string) => {
     try {
@@ -209,6 +212,39 @@ export default function ScriptDetailPage({
     }
   }
 
+  const handleGenerateAudio = async () => {
+    if (!script) return
+    setGeneratingAudio(true)
+    try {
+      const res = await fetch("/api/audio/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scriptId: script.id }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast({
+          title: "Fehler",
+          description: data.error || "Audio-Generierung fehlgeschlagen.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      toast({ title: "Erfolg", description: "Audio wurde generiert!" })
+      // Refresh script to get updated status
+      fetchScript(script.id)
+      // Navigate to audio page
+      router.push("/audio")
+    } catch {
+      toast({ title: "Fehler", description: "Netzwerkfehler bei der Audio-Generierung.", variant: "destructive" })
+    } finally {
+      setGeneratingAudio(false)
+    }
+  }
+
   const switchToVersion = (versionId: string) => {
     router.push(`/scripts/${versionId}`)
     fetchScript(versionId)
@@ -257,6 +293,19 @@ export default function ScriptDetailPage({
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {!editing && (script.status === "DRAFT" || script.status === "APPROVED") && (
+            <Button
+              onClick={handleGenerateAudio}
+              disabled={generatingAudio}
+            >
+              {generatingAudio ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Volume2 className="mr-2 h-4 w-4" />
+              )}
+              {generatingAudio ? "Audio wird generiert..." : "Audio generieren"}
+            </Button>
+          )}
           {!editing && (script.status === "DRAFT" || script.status === "REVISING") && (
             <Button variant="outline" onClick={handleApprove}>Freigeben</Button>
           )}

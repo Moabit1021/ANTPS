@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "@/components/ui/use-toast"
-import { Loader2, Save, Eye, EyeOff } from "lucide-react"
+import { Loader2, Save, Eye, EyeOff, RefreshCw } from "lucide-react"
 
 interface Settings {
   llm_provider: string
@@ -28,6 +28,15 @@ interface Settings {
   elevenlabs_api_key: string
   elevenlabs_api_key_masked: string
   elevenlabs_api_key_set: string
+  elevenlabs_voice_id: string
+  elevenlabs_model: string
+}
+
+interface VoiceInfo {
+  voice_id: string
+  name: string
+  category: string
+  labels: Record<string, string>
 }
 
 const MODEL_OPTIONS: Record<string, { label: string; models: { value: string; label: string }[] }> = {
@@ -49,20 +58,32 @@ const MODEL_OPTIONS: Record<string, { label: string; models: { value: string; la
   },
 }
 
+const ELEVENLABS_MODELS = [
+  { value: "eleven_multilingual_v2", label: "Multilingual v2 (empfohlen)" },
+  { value: "eleven_turbo_v2_5", label: "Turbo v2.5 (schneller)" },
+  { value: "eleven_monolingual_v1", label: "Monolingual v1 (Englisch)" },
+]
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Form state
+  // Form state - LLM
   const [provider, setProvider] = useState("anthropic")
   const [apiKey, setApiKey] = useState("")
   const [showApiKey, setShowApiKey] = useState(false)
   const [model, setModel] = useState("claude-sonnet-4-20250514")
   const [systemPrompt, setSystemPrompt] = useState("")
   const [userTemplate, setUserTemplate] = useState("")
+
+  // Form state - ElevenLabs
   const [elevenlabsKey, setElevenlabsKey] = useState("")
   const [showElevenlabsKey, setShowElevenlabsKey] = useState(false)
+  const [elevenlabsVoiceId, setElevenlabsVoiceId] = useState("")
+  const [elevenlabsModel, setElevenlabsModel] = useState("eleven_multilingual_v2")
+  const [voices, setVoices] = useState<VoiceInfo[]>([])
+  const [loadingVoices, setLoadingVoices] = useState(false)
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -74,6 +95,8 @@ export default function SettingsPage() {
       setModel(data.llm_model || "claude-sonnet-4-20250514")
       setSystemPrompt(data.prompt_system || "")
       setUserTemplate(data.prompt_user_template || "")
+      setElevenlabsVoiceId(data.elevenlabs_voice_id || "")
+      setElevenlabsModel(data.elevenlabs_model || "eleven_multilingual_v2")
     } catch {
       toast({ title: "Fehler", description: "Einstellungen konnten nicht geladen werden.", variant: "destructive" })
     } finally {
@@ -85,12 +108,35 @@ export default function SettingsPage() {
     fetchSettings()
   }, [fetchSettings])
 
-  // When provider changes, pick the first model of that provider
   const handleProviderChange = (newProvider: string) => {
     setProvider(newProvider)
     const providerModels = MODEL_OPTIONS[newProvider]
     if (providerModels?.models.length) {
       setModel(providerModels.models[0].value)
+    }
+  }
+
+  const loadVoices = async () => {
+    setLoadingVoices(true)
+    try {
+      const res = await fetch("/api/elevenlabs/voices")
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || "Fehler beim Laden")
+      }
+      const data = await res.json()
+      setVoices(data.voices || [])
+      if (data.voices?.length > 0) {
+        toast({ title: "Erfolg", description: `${data.voices.length} Stimmen geladen.` })
+      }
+    } catch (e) {
+      toast({
+        title: "Fehler",
+        description: e instanceof Error ? e.message : "Stimmen konnten nicht geladen werden.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingVoices(false)
     }
   }
 
@@ -102,8 +148,9 @@ export default function SettingsPage() {
         llm_model: model,
         prompt_system: systemPrompt,
         prompt_user_template: userTemplate,
+        elevenlabs_voice_id: elevenlabsVoiceId,
+        elevenlabs_model: elevenlabsModel,
       }
-      // Only send API keys if user entered a new one
       if (apiKey) body.llm_api_key = apiKey
       if (elevenlabsKey) body.elevenlabs_api_key = elevenlabsKey
 
@@ -141,7 +188,7 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Einstellungen</h1>
-        <p className="text-muted-foreground">Konfiguration fuer LLM-Anbindung und Prompt-Vorlagen</p>
+        <p className="text-muted-foreground">Konfiguration fuer LLM-Anbindung, Prompts und Sprachsynthese</p>
       </div>
 
       <Tabs defaultValue="llm">
@@ -272,9 +319,9 @@ export default function SettingsPage() {
         <TabsContent value="tts" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>ElevenLabs</CardTitle>
+              <CardTitle>ElevenLabs API</CardTitle>
               <CardDescription>
-                API-Schluessel fuer die Sprachsynthese mit ElevenLabs. Wird fuer die Audio-Generierung benoetigt (Phase 4).
+                API-Schluessel fuer die Sprachsynthese mit ElevenLabs.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -301,6 +348,77 @@ export default function SettingsPage() {
                     {showElevenlabsKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Stimme und Modell</CardTitle>
+              <CardDescription>
+                Waehlen Sie die Stimme und das Modell fuer die Audio-Generierung. Speichern Sie zuerst den API-Schluessel, dann laden Sie die verfuegbaren Stimmen.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>ElevenLabs Modell</Label>
+                <Select value={elevenlabsModel} onValueChange={setElevenlabsModel}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ELEVENLABS_MODELS.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Stimme</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={loadVoices}
+                    disabled={loadingVoices}
+                  >
+                    {loadingVoices ? (
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-1 h-3 w-3" />
+                    )}
+                    Stimmen laden
+                  </Button>
+                </div>
+
+                {voices.length > 0 ? (
+                  <Select value={elevenlabsVoiceId} onValueChange={setElevenlabsVoiceId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Stimme auswaehlen..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {voices.map((v) => (
+                        <SelectItem key={v.voice_id} value={v.voice_id}>
+                          {v.name} ({v.category}{v.labels?.accent ? `, ${v.labels.accent}` : ""})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Voice-ID manuell eingeben oder Stimmen laden..."
+                      value={elevenlabsVoiceId}
+                      onChange={(e) => setElevenlabsVoiceId(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Klicken Sie &quot;Stimmen laden&quot; um verfuegbare Stimmen aus Ihrem ElevenLabs-Konto zu laden, oder geben Sie eine Voice-ID manuell ein.
+                    </p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

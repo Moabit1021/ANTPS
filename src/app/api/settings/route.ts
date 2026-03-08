@@ -13,6 +13,8 @@ const SETTING_KEYS = [
   "prompt_system",       // System prompt for script generation
   "prompt_user_template", // User prompt template (with {{sources}} placeholder)
   "elevenlabs_api_key",  // ElevenLabs API key for TTS
+  "elevenlabs_voice_id", // ElevenLabs voice ID
+  "elevenlabs_model",    // ElevenLabs model ID
 ] as const
 
 // Defaults
@@ -41,6 +43,7 @@ Format des Skripts:
 {{sources}}
 
 Erstelle daraus ein zusammenhaengendes, unterhaltsames Podcast-Skript.`,
+  elevenlabs_model: "eleven_multilingual_v2",
 }
 
 export async function GET() {
