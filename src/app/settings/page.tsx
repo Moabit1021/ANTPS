@@ -29,6 +29,9 @@ interface Settings {
   elevenlabs_api_key_masked: string
   elevenlabs_api_key_set: string
   elevenlabs_voice_id: string
+  elevenlabs_voice_id_2: string
+  elevenlabs_voice_name_1: string
+  elevenlabs_voice_name_2: string
   elevenlabs_model: string
 }
 
@@ -81,6 +84,9 @@ export default function SettingsPage() {
   const [elevenlabsKey, setElevenlabsKey] = useState("")
   const [showElevenlabsKey, setShowElevenlabsKey] = useState(false)
   const [elevenlabsVoiceId, setElevenlabsVoiceId] = useState("")
+  const [elevenlabsVoiceId2, setElevenlabsVoiceId2] = useState("")
+  const [voiceName1, setVoiceName1] = useState("Alex")
+  const [voiceName2, setVoiceName2] = useState("Kim")
   const [elevenlabsModel, setElevenlabsModel] = useState("eleven_multilingual_v2")
   const [voices, setVoices] = useState<VoiceInfo[]>([])
   const [loadingVoices, setLoadingVoices] = useState(false)
@@ -96,6 +102,9 @@ export default function SettingsPage() {
       setSystemPrompt(data.prompt_system || "")
       setUserTemplate(data.prompt_user_template || "")
       setElevenlabsVoiceId(data.elevenlabs_voice_id || "")
+      setElevenlabsVoiceId2(data.elevenlabs_voice_id_2 || "")
+      setVoiceName1(data.elevenlabs_voice_name_1 || "Alex")
+      setVoiceName2(data.elevenlabs_voice_name_2 || "Kim")
       setElevenlabsModel(data.elevenlabs_model || "eleven_multilingual_v2")
     } catch {
       toast({ title: "Fehler", description: "Einstellungen konnten nicht geladen werden.", variant: "destructive" })
@@ -149,6 +158,9 @@ export default function SettingsPage() {
         prompt_system: systemPrompt,
         prompt_user_template: userTemplate,
         elevenlabs_voice_id: elevenlabsVoiceId,
+        elevenlabs_voice_id_2: elevenlabsVoiceId2,
+        elevenlabs_voice_name_1: voiceName1,
+        elevenlabs_voice_name_2: voiceName2,
         elevenlabs_model: elevenlabsModel,
       }
       if (apiKey) body.llm_api_key = apiKey
@@ -354,71 +366,120 @@ export default function SettingsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Stimme und Modell</CardTitle>
+              <CardTitle>Modell und Stimmen</CardTitle>
               <CardDescription>
-                Waehlen Sie die Stimme und das Modell fuer die Audio-Generierung. Speichern Sie zuerst den API-Schluessel, dann laden Sie die verfuegbaren Stimmen.
+                Konfigurieren Sie das ElevenLabs-Modell und bis zu zwei Stimmen fuer den Podcast-Dialog.
+                Die Sprecher-Namen muessen mit den Markern im Skript uebereinstimmen (z.B. [Alex] oder Alex:).
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between">
                 <Label>ElevenLabs Modell</Label>
-                <Select value={elevenlabsModel} onValueChange={setElevenlabsModel}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ELEVENLABS_MODELS.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadVoices}
+                  disabled={loadingVoices}
+                >
+                  {loadingVoices ? (
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-1 h-3 w-3" />
+                  )}
+                  Stimmen laden
+                </Button>
+              </div>
+              <Select value={elevenlabsModel} onValueChange={setElevenlabsModel}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ELEVENLABS_MODELS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Voice 1 */}
+              <div className="rounded-lg border p-4 space-y-3">
+                <h4 className="font-medium text-sm">Stimme 1 (Hauptsprecher)</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Sprecher-Name im Skript</Label>
+                    <Input
+                      value={voiceName1}
+                      onChange={(e) => setVoiceName1(e.target.value)}
+                      placeholder="z.B. Alex"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">ElevenLabs Stimme</Label>
+                    {voices.length > 0 ? (
+                      <Select value={elevenlabsVoiceId} onValueChange={setElevenlabsVoiceId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Stimme waehlen..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {voices.map((v) => (
+                            <SelectItem key={v.voice_id} value={v.voice_id}>
+                              {v.name} ({v.category})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        placeholder="Voice-ID eingeben..."
+                        value={elevenlabsVoiceId}
+                        onChange={(e) => setElevenlabsVoiceId(e.target.value)}
+                      />
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Stimme</Label>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={loadVoices}
-                    disabled={loadingVoices}
-                  >
-                    {loadingVoices ? (
-                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                    ) : (
-                      <RefreshCw className="mr-1 h-3 w-3" />
-                    )}
-                    Stimmen laden
-                  </Button>
-                </div>
-
-                {voices.length > 0 ? (
-                  <Select value={elevenlabsVoiceId} onValueChange={setElevenlabsVoiceId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Stimme auswaehlen..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {voices.map((v) => (
-                        <SelectItem key={v.voice_id} value={v.voice_id}>
-                          {v.name} ({v.category}{v.labels?.accent ? `, ${v.labels.accent}` : ""})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <div className="space-y-2">
+              {/* Voice 2 */}
+              <div className="rounded-lg border p-4 space-y-3">
+                <h4 className="font-medium text-sm">Stimme 2 (optional, fuer Dialog-Podcasts)</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Sprecher-Name im Skript</Label>
                     <Input
-                      placeholder="Voice-ID manuell eingeben oder Stimmen laden..."
-                      value={elevenlabsVoiceId}
-                      onChange={(e) => setElevenlabsVoiceId(e.target.value)}
+                      value={voiceName2}
+                      onChange={(e) => setVoiceName2(e.target.value)}
+                      placeholder="z.B. Kim"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Klicken Sie &quot;Stimmen laden&quot; um verfuegbare Stimmen aus Ihrem ElevenLabs-Konto zu laden, oder geben Sie eine Voice-ID manuell ein.
-                    </p>
                   </div>
-                )}
+                  <div className="space-y-1">
+                    <Label className="text-xs">ElevenLabs Stimme</Label>
+                    {voices.length > 0 ? (
+                      <Select value={elevenlabsVoiceId2 || "_none"} onValueChange={(v) => setElevenlabsVoiceId2(v === "_none" ? "" : v)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Keine (Single-Voice)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">Keine (Single-Voice)</SelectItem>
+                          {voices.map((v) => (
+                            <SelectItem key={v.voice_id} value={v.voice_id}>
+                              {v.name} ({v.category})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        placeholder="Voice-ID eingeben (leer lassen fuer Single-Voice)..."
+                        value={elevenlabsVoiceId2}
+                        onChange={(e) => setElevenlabsVoiceId2(e.target.value)}
+                      />
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Bei einem Dialog-Podcast muss das Skript Sprecher-Marker enthalten, z.B. <code className="bg-muted px-1 py-0.5 rounded">[{voiceName1}]</code> und <code className="bg-muted px-1 py-0.5 rounded">[{voiceName2}]</code> oder <code className="bg-muted px-1 py-0.5 rounded">{voiceName1}:</code> und <code className="bg-muted px-1 py-0.5 rounded">{voiceName2}:</code>.
+                </p>
               </div>
             </CardContent>
           </Card>

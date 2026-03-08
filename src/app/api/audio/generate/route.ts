@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { textToSpeech } from "@/lib/elevenlabs"
+import { multiVoiceTextToSpeech } from "@/lib/elevenlabs"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 
@@ -35,14 +35,18 @@ export async function POST(request: NextRequest) {
 
   // Get ElevenLabs config for storing voice/model info
   const elConfig = await prisma.appSetting.findMany({
-    where: { key: { in: ["elevenlabs_voice_id", "elevenlabs_model"] } },
+    where: {
+      key: {
+        in: ["elevenlabs_voice_id", "elevenlabs_voice_id_2", "elevenlabs_model"],
+      },
+    },
   })
   const configMap: Record<string, string> = {}
   for (const s of elConfig) configMap[s.key] = s.value
 
   try {
-    // Generate audio via ElevenLabs
-    const result = await textToSpeech(script.content)
+    // Generate audio via ElevenLabs (auto-detects single vs multi-voice)
+    const result = await multiVoiceTextToSpeech(script.content)
 
     // Save audio file to disk
     const audioDir = path.join(process.cwd(), "data", "audio")
@@ -52,7 +56,7 @@ export async function POST(request: NextRequest) {
     const filePath = path.join(audioDir, fileName)
     await writeFile(filePath, result.audioBuffer)
 
-    // Estimate duration (rough: ~150 words per minute, average word length 5 chars)
+    // Estimate duration (rough: ~150 words per minute)
     const wordCount = script.content.split(/\s+/).length
     const estimatedDuration = Math.round((wordCount / 150) * 60)
 
@@ -65,7 +69,7 @@ export async function POST(request: NextRequest) {
         fileSize: result.audioBuffer.length,
         duration: estimatedDuration,
         voiceAlexId: configMap.elevenlabs_voice_id || "",
-        voiceKimId: "",
+        voiceKimId: configMap.elevenlabs_voice_id_2 || "",
         modelId: configMap.elevenlabs_model || "eleven_multilingual_v2",
         status: "COMPLETED",
       },
