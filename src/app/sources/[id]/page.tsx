@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { use, useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Pencil, Save, X, Archive, Trash2, Loader2 } from "lucide-react"
@@ -82,8 +82,9 @@ function formatDate(dateString: string): string {
 export default function SourceDetailPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
+  const { id } = use(params)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -103,7 +104,7 @@ export default function SourceDetailPage({
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch(`/api/sources/${params.id}`)
+      const res = await fetch(`/api/sources/${id}`)
       if (!res.ok) {
         if (res.status === 404) {
           setError("Quelle nicht gefunden.")
@@ -119,7 +120,7 @@ export default function SourceDetailPage({
     } finally {
       setLoading(false)
     }
-  }, [params.id])
+  }, [id])
 
   useEffect(() => {
     fetchSource()
