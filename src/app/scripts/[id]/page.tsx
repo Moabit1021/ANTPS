@@ -3,9 +3,9 @@
 import { use, useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Pencil, Save, X, Trash2, Loader2, Copy, Check } from "lucide-react"
+import { ArrowLeft, Pencil, Save, X, Trash2, Loader2, Copy, Check, RefreshCw, History } from "lucide-react"
 
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
@@ -20,11 +20,20 @@ interface ScriptSource {
   source: { id: string; title: string; type: string }
 }
 
+interface VersionInfo {
+  id: string
+  version: number
+  status: string
+  createdAt: string
+  config: { revisionInstructions?: string } | null
+}
+
 interface Script {
   id: string
   title: string
   content: string
   version: number
+  parentId: string | null
   status: string
   modelUsed: string | null
   promptTokens: number | null
@@ -32,12 +41,13 @@ interface Script {
   createdAt: string
   updatedAt: string
   sources: ScriptSource[]
+  versions: VersionInfo[]
 }
 
 const STATUS_LABELS: Record<string, string> = {
   GENERATING: "Wird generiert",
   DRAFT: "Entwurf",
-  REVISING: "Ueberarbeitung",
+  REVISING: "Ueberarbeitet",
   APPROVED: "Freigegeben",
   AUDIO_PENDING: "Audio ausstehend",
   COMPLETED: "Abgeschlossen",
@@ -47,6 +57,7 @@ function statusClass(status: string): string {
   switch (status) {
     case "GENERATING": return "bg-yellow-100 text-yellow-800 border-yellow-200"
     case "DRAFT": return "bg-blue-100 text-blue-800 border-blue-200"
+    case "REVISING": return "bg-orange-100 text-orange-800 border-orange-200"
     case "APPROVED": return "bg-green-100 text-green-800 border-green-200"
     default: return ""
   }
@@ -81,10 +92,15 @@ export default function ScriptDetailPage({
   const [deleting, setDeleting] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const fetchScript = useCallback(async () => {
+  // Revision state
+  const [revisionInstructions, setRevisionInstructions] = useState("")
+  const [revising, setRevising] = useState(false)
+
+  const fetchScript = useCallback(async (scriptId: string) => {
     try {
       setLoading(true)
-      const res = await fetch(`/api/scripts/${id}`)
+      setError(null)
+      const res = await fetch(`/api/scripts/${scriptId}`)
       if (!res.ok) {
         setError(res.status === 404 ? "Skript nicht gefunden." : "Fehler beim Laden.")
         return
@@ -96,9 +112,9 @@ export default function ScriptDetailPage({
     } finally {
       setLoading(false)
     }
-  }, [id])
+  }, [])
 
-  useEffect(() => { fetchScript() }, [fetchScript])
+  useEffect(() => { fetchScript(id) }, [fetchScript, id])
 
   const handleSave = async () => {
     if (!script) return
@@ -160,6 +176,44 @@ export default function ScriptDetailPage({
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleRevise = async () => {
+    if (!script || !revisionInstructions.trim()) return
+    setRevising(true)
+    try {
+      const res = await fetch(`/api/scripts/${script.id}/revise`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instructions: revisionInstructions }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast({
+          title: "Fehler",
+          description: data.error || "Ueberarbeitung fehlgeschlagen.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      toast({ title: "Erfolg", description: "Skript wurde ueberarbeitet!" })
+      setRevisionInstructions("")
+      // Navigate to the new version
+      router.push(`/scripts/${data.id}`)
+      fetchScript(data.id)
+    } catch {
+      toast({ title: "Fehler", description: "Netzwerkfehler bei der Ueberarbeitung.", variant: "destructive" })
+    } finally {
+      setRevising(false)
+    }
+  }
+
+  const switchToVersion = (versionId: string) => {
+    router.push(`/scripts/${versionId}`)
+    fetchScript(versionId)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -179,6 +233,9 @@ export default function ScriptDetailPage({
     )
   }
 
+  const versions = script.versions || []
+  const hasMultipleVersions = versions.length > 1
+
   return (
     <div className="space-y-6 p-6">
       <Link href="/scripts" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
@@ -193,13 +250,14 @@ export default function ScriptDetailPage({
             <Badge variant="outline" className={statusClass(script.status)}>
               {STATUS_LABELS[script.status] || script.status}
             </Badge>
+            <Badge variant="secondary">Version {script.version}</Badge>
             {script.modelUsed && (
               <span className="text-sm text-muted-foreground">{script.modelUsed}</span>
             )}
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {!editing && script.status === "DRAFT" && (
+          {!editing && (script.status === "DRAFT" || script.status === "REVISING") && (
             <Button variant="outline" onClick={handleApprove}>Freigeben</Button>
           )}
           {!editing && (
@@ -251,6 +309,58 @@ export default function ScriptDetailPage({
         </CardContent>
       </Card>
 
+      {/* Version history */}
+      {hasMultipleVersions && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Versionen
+            </CardTitle>
+            <CardDescription>
+              Klicken Sie auf eine Version, um zu dieser zurueckzukehren.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {versions.map((v) => {
+                const isCurrent = v.id === script.id
+                const revInstr = (v.config as { revisionInstructions?: string } | null)?.revisionInstructions
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => !isCurrent && switchToVersion(v.id)}
+                    className={`relative flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors ${
+                      isCurrent
+                        ? "border-primary bg-primary/5 ring-2 ring-primary"
+                        : "hover:bg-muted/50 cursor-pointer"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">V{v.version}</span>
+                      <Badge variant="outline" className={`text-xs ${statusClass(v.status)}`}>
+                        {STATUS_LABELS[v.status] || v.status}
+                      </Badge>
+                      {isCurrent && (
+                        <Badge variant="default" className="text-xs">Aktuell</Badge>
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {formatDate(v.createdAt)}
+                    </span>
+                    {revInstr && (
+                      <span className="text-xs text-muted-foreground italic line-clamp-1 max-w-[200px]">
+                        &quot;{revInstr}&quot;
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Script content */}
       <Card>
         <CardHeader>
@@ -296,6 +406,53 @@ export default function ScriptDetailPage({
           )}
         </CardContent>
       </Card>
+
+      {/* Revision section */}
+      {!editing && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5" />
+              Skript ueberarbeiten
+            </CardTitle>
+            <CardDescription>
+              Geben Sie Anweisungen ein, wie das Skript ueberarbeitet werden soll. Eine neue Version wird erstellt, die alte bleibt erhalten.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Textarea
+              placeholder="z.B. 'Mache die Einleitung kuerzer und fuege mehr Details zum Thema Digitalisierung hinzu' oder 'Aendere den Ton zu formeller' oder 'Fuege einen Abschnitt ueber KI hinzu'..."
+              value={revisionInstructions}
+              onChange={(e) => setRevisionInstructions(e.target.value)}
+              rows={4}
+              disabled={revising}
+            />
+            <div className="flex items-center gap-4">
+              <Button
+                onClick={handleRevise}
+                disabled={revising || !revisionInstructions.trim()}
+              >
+                {revising ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Wird ueberarbeitet...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Ueberarbeiten
+                  </>
+                )}
+              </Button>
+              {revising && (
+                <span className="text-sm text-muted-foreground">
+                  Das KI-Modell ueberarbeitet das Skript. Dies kann bis zu einer Minute dauern.
+                </span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Delete dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

@@ -32,7 +32,60 @@ export async function GET(
     return NextResponse.json({ error: "Skript nicht gefunden" }, { status: 404 })
   }
 
-  return NextResponse.json(script)
+  // Build version chain: find root, then collect all versions
+  let rootId = script.id
+  let current = script
+  // Walk up to root
+  while (current.parentId) {
+    const parent = await prisma.podcastScript.findUnique({
+      where: { id: current.parentId },
+      select: { id: true, parentId: true },
+    })
+    if (!parent) break
+    rootId = parent.id
+    current = parent as typeof current
+  }
+
+  // Find all scripts in this version chain
+  const allScripts = await prisma.podcastScript.findMany({
+    where: {
+      OR: [
+        { id: rootId },
+        { parentId: rootId },
+      ],
+    },
+    select: {
+      id: true,
+      version: true,
+      status: true,
+      createdAt: true,
+      config: true,
+    },
+    orderBy: { version: "asc" },
+  })
+
+  // For deeper chains (>2 levels), also find children of children
+  if (allScripts.length > 0) {
+    const ids = allScripts.map((s) => s.id)
+    const deeper = await prisma.podcastScript.findMany({
+      where: {
+        parentId: { in: ids },
+        id: { notIn: ids },
+      },
+      select: {
+        id: true,
+        version: true,
+        status: true,
+        createdAt: true,
+        config: true,
+      },
+      orderBy: { version: "asc" },
+    })
+    allScripts.push(...deeper)
+    allScripts.sort((a, b) => a.version - b.version)
+  }
+
+  return NextResponse.json({ ...script, versions: allScripts })
 }
 
 export async function PATCH(

@@ -125,6 +125,42 @@ async function generateWithAnthropic(
   }
 }
 
+export async function reviseScript(
+  currentContent: string,
+  instructions: string
+): Promise<GenerationResult> {
+  const config = await getLLMConfig()
+
+  if (!config.apiKey) {
+    throw new Error("Kein API-Schluessel konfiguriert. Bitte in den Einstellungen hinterlegen.")
+  }
+
+  const systemMessage = `Du bist ein erfahrener Podcast-Redakteur. Dir wird ein bestehendes Podcast-Skript vorgelegt zusammen mit Anweisungen zur Ueberarbeitung. Setze die Anweisungen um und gib das vollstaendige, ueberarbeitete Skript zurueck.
+
+Wichtig:
+- Gib NUR das ueberarbeitete Skript zurueck, keine Erklaerungen oder Kommentare
+- Behalte den grundlegenden Aufbau bei, es sei denn, die Anweisungen fordern ausdruecklich eine Umstrukturierung
+- Verwende KEINE Markdown-Formatierung
+- Schreibe den Text so, wie er vorgelesen werden soll`
+
+  const userMessage = `Hier ist das aktuelle Podcast-Skript:
+
+---SKRIPT ANFANG---
+${currentContent}
+---SKRIPT ENDE---
+
+Bitte ueberarbeite das Skript nach folgenden Anweisungen:
+${instructions}`
+
+  if (config.provider === "anthropic") {
+    return generateWithAnthropic({ ...config, systemPrompt: systemMessage }, userMessage)
+  } else if (config.provider === "openai") {
+    return generateWithOpenAI({ ...config, systemPrompt: systemMessage }, userMessage)
+  } else {
+    throw new Error(`Unbekannter Anbieter: ${config.provider}`)
+  }
+}
+
 async function generateWithOpenAI(
   config: LLMConfig,
   userMessage: string
