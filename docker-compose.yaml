@@ -7,6 +7,10 @@ services:
       - DATABASE_URL=postgresql://podbrief:podbrief@db:5432/podbrief
       - REDIS_URL=redis://redis:6379
       - NODE_ENV=production
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-change-me-in-production}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@podbrief.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
     volumes:
       - app_data:/app/data
     depends_on:

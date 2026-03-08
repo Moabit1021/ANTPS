@@ -26,6 +26,7 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/bcrypt ./node_modules/bcrypt
 COPY --from=builder /app/package.json ./package.json
 
 RUN mkdir -p /app/data/audio /app/data/uploads /app/data/feed
@@ -36,4 +37,4 @@ VOLUME ["/app/data"]
 USER nextjs
 EXPOSE 3000
 
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node server.js"]
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node prisma/seed-prod.js && node server.js"]
