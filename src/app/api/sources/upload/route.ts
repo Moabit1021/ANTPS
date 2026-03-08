@@ -29,14 +29,16 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
 
-    // Extract text from PDF (dynamic import to avoid pdf-parse loading test file at build time)
+    // Extract text from PDF
     let plainText = ""
     try {
+      // Use pdf-parse/lib/pdf-parse.js directly to avoid the test-file-loading index.js wrapper
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pdf = require("pdf-parse")
-      const pdfData = await pdf(buffer)
+      const pdfParse = require("pdf-parse/lib/pdf-parse.js")
+      const pdfData = await pdfParse(buffer)
       plainText = pdfData.text
-    } catch {
+    } catch (pdfError) {
+      console.error("PDF parse error:", pdfError)
       return NextResponse.json({ error: "PDF konnte nicht gelesen werden" }, { status: 400 })
     }
 
