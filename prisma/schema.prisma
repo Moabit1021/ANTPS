@@ -8,17 +8,36 @@ datasource db {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  name          String?
-  passwordHash  String
-  role          Role     @default(ADMIN)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                String    @id @default(cuid())
+  email             String    @unique
+  name              String?
+  passwordHash      String
+  role              Role      @default(CREATOR)
+  isActive          Boolean   @default(true)
+  failedLoginAttempts Int     @default(0)
+  lockedUntil       DateTime?
+  lastLoginAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  invitesSent       InviteToken[] @relation("InvitedBy")
 }
 
 enum Role {
   ADMIN
+  CREATOR
+}
+
+model InviteToken {
+  id          String    @id @default(cuid())
+  email       String
+  token       String    @unique @default(cuid())
+  expiresAt   DateTime
+  usedAt      DateTime?
+  invitedById String
+  invitedBy   User      @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  @@index([token])
+  @@index([email])
 }
 
 model Source {

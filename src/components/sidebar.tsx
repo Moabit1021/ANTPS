@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { useState } from "react"
 import {
   LayoutDashboard,
@@ -13,25 +14,39 @@ import {
   Settings,
   Menu,
   X,
+  ShieldCheck,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { signOut } from "next-auth/react"
 
-const navItems = [
+interface NavItem {
+  href: string
+  label: string
+  icon: typeof LayoutDashboard
+  adminOnly?: boolean
+}
+
+const navItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/sources", label: "Quellen", icon: FileText },
   { href: "/scripts", label: "Skripte", icon: ScrollText },
   { href: "/audio", label: "Audio", icon: Headphones },
   { href: "/episodes", label: "Episoden", icon: Radio },
-  { href: "/subscribers", label: "Abonnenten", icon: Users },
-  { href: "/settings", label: "Einstellungen", icon: Settings },
+  { href: "/subscribers", label: "Abonnenten", icon: Users, adminOnly: true },
+  { href: "/users", label: "Benutzer", icon: ShieldCheck, adminOnly: true },
+  { href: "/settings", label: "Einstellungen", icon: Settings, adminOnly: true },
 ]
 
 export function Sidebar() {
   const pathname = usePathname()
+  const { data: session } = useSession()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const isAdmin = session?.user?.role === "ADMIN"
+
+  const visibleItems = navItems.filter((item) => !item.adminOnly || isAdmin)
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/"
@@ -46,7 +61,7 @@ export function Sidebar() {
       </div>
       <Separator />
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon
           return (
             <Link
@@ -68,6 +83,11 @@ export function Sidebar() {
       </nav>
       <Separator />
       <div className="p-3">
+        {session?.user?.email && (
+          <p className="px-3 pb-2 text-xs text-muted-foreground truncate">
+            {session.user.email}
+          </p>
+        )}
         <Button
           variant="ghost"
           className="w-full justify-start text-muted-foreground"

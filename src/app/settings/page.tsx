@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "@/components/ui/use-toast"
-import { Loader2, Save, Eye, EyeOff, RefreshCw, Copy, Check } from "lucide-react"
+import { Loader2, Save, Eye, EyeOff, RefreshCw, Copy, Check, Mail } from "lucide-react"
 
 interface Settings {
   llm_provider: string
@@ -33,6 +33,15 @@ interface Settings {
   elevenlabs_voice_name_1: string
   elevenlabs_voice_name_2: string
   elevenlabs_model: string
+  smtp_host: string
+  smtp_port: string
+  smtp_user: string
+  smtp_pass: string
+  smtp_pass_masked: string
+  smtp_pass_set: string
+  smtp_from_email: string
+  smtp_from_name: string
+  smtp_secure: string
 }
 
 interface VoiceInfo {
@@ -101,6 +110,17 @@ export default function SettingsPage() {
   const [voices, setVoices] = useState<VoiceInfo[]>([])
   const [loadingVoices, setLoadingVoices] = useState(false)
 
+  // Form state - SMTP
+  const [smtpHost, setSmtpHost] = useState("")
+  const [smtpPort, setSmtpPort] = useState("465")
+  const [smtpUser, setSmtpUser] = useState("")
+  const [smtpPass, setSmtpPass] = useState("")
+  const [showSmtpPass, setShowSmtpPass] = useState(false)
+  const [smtpFromEmail, setSmtpFromEmail] = useState("")
+  const [smtpFromName, setSmtpFromName] = useState("PodBrief")
+  const [smtpSecure, setSmtpSecure] = useState("true")
+  const [testingSmtp, setTestingSmtp] = useState(false)
+
   const fetchSettings = useCallback(async () => {
     try {
       const res = await fetch("/api/settings")
@@ -116,6 +136,13 @@ export default function SettingsPage() {
       setVoiceName1(data.elevenlabs_voice_name_1 || "Alex")
       setVoiceName2(data.elevenlabs_voice_name_2 || "Kim")
       setElevenlabsModel(data.elevenlabs_model || "eleven_multilingual_v2")
+      // SMTP
+      setSmtpHost(data.smtp_host || "")
+      setSmtpPort(data.smtp_port || "465")
+      setSmtpUser(data.smtp_user || "")
+      setSmtpFromEmail(data.smtp_from_email || "")
+      setSmtpFromName(data.smtp_from_name || "PodBrief")
+      setSmtpSecure(data.smtp_secure || "true")
     } catch {
       toast({ title: "Fehler", description: "Einstellungen konnten nicht geladen werden.", variant: "destructive" })
     } finally {
@@ -192,8 +219,17 @@ export default function SettingsPage() {
         elevenlabs_voice_name_2: voiceName2,
         elevenlabs_model: elevenlabsModel,
       }
+      // SMTP
+      if (smtpHost) body.smtp_host = smtpHost
+      if (smtpPort) body.smtp_port = smtpPort
+      if (smtpUser) body.smtp_user = smtpUser
+      if (smtpFromEmail) body.smtp_from_email = smtpFromEmail
+      if (smtpFromName) body.smtp_from_name = smtpFromName
+      body.smtp_secure = smtpSecure
+
       if (apiKey) body.llm_api_key = apiKey
       if (elevenlabsKey) body.elevenlabs_api_key = elevenlabsKey
+      if (smtpPass) body.smtp_pass = smtpPass
 
       const res = await fetch("/api/settings", {
         method: "PUT",
@@ -205,8 +241,10 @@ export default function SettingsPage() {
       toast({ title: "Gespeichert", description: "Einstellungen wurden aktualisiert." })
       setApiKey("")
       setElevenlabsKey("")
+      setSmtpPass("")
       setShowApiKey(false)
       setShowElevenlabsKey(false)
+      setShowSmtpPass(false)
       fetchSettings()
     } catch {
       toast({ title: "Fehler", description: "Einstellungen konnten nicht gespeichert werden.", variant: "destructive" })
@@ -268,6 +306,7 @@ export default function SettingsPage() {
           <TabsTrigger value="prompts">Prompts</TabsTrigger>
           <TabsTrigger value="tts">Sprachsynthese</TabsTrigger>
           <TabsTrigger value="feed">Podcast-Feed</TabsTrigger>
+          <TabsTrigger value="smtp">E-Mail (SMTP)</TabsTrigger>
         </TabsList>
 
         {/* LLM Configuration Tab */}
@@ -654,6 +693,144 @@ export default function SettingsPage() {
                   </div>
                 </>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* SMTP Configuration Tab */}
+        <TabsContent value="smtp" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>SMTP-Server</CardTitle>
+              <CardDescription>
+                E-Mail-Einstellungen fuer den Versand von Einladungen und Benachrichtigungen.
+                Bei zone.ee verwenden Sie <code className="bg-muted px-1 py-0.5 rounded text-xs">mail.zone.ee</code> als Host mit Port 465 (SSL).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>SMTP-Host</Label>
+                  <Input
+                    value={smtpHost}
+                    onChange={(e) => setSmtpHost(e.target.value)}
+                    placeholder="mail.zone.ee"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Port</Label>
+                  <Select value={smtpPort} onValueChange={setSmtpPort}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="465">465 (SSL/TLS)</SelectItem>
+                      <SelectItem value="587">587 (STARTTLS)</SelectItem>
+                      <SelectItem value="25">25 (unverschluesselt)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Benutzername</Label>
+                  <Input
+                    value={smtpUser}
+                    onChange={(e) => setSmtpUser(e.target.value)}
+                    placeholder="noreply@example.ee"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Passwort</Label>
+                  {settings?.smtp_pass_set === "true" && (
+                    <p className="text-sm text-muted-foreground">
+                      Aktuell gesetzt: {settings.smtp_pass_masked}
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <Input
+                      type={showSmtpPass ? "text" : "password"}
+                      placeholder={settings?.smtp_pass_set === "true" ? "Neues Passwort eingeben..." : "Passwort eingeben..."}
+                      value={smtpPass}
+                      onChange={(e) => setSmtpPass(e.target.value)}
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      type="button"
+                      onClick={() => setShowSmtpPass(!showSmtpPass)}
+                    >
+                      {showSmtpPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Absender-E-Mail</Label>
+                  <Input
+                    value={smtpFromEmail}
+                    onChange={(e) => setSmtpFromEmail(e.target.value)}
+                    placeholder="noreply@example.ee"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leer lassen, um den Benutzernamen zu verwenden
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Absender-Name</Label>
+                  <Input
+                    value={smtpFromName}
+                    onChange={(e) => setSmtpFromName(e.target.value)}
+                    placeholder="PodBrief"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Verschluesselung</Label>
+                <Select value={smtpSecure} onValueChange={setSmtpSecure}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">SSL/TLS (empfohlen)</SelectItem>
+                    <SelectItem value="false">Keine / STARTTLS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    setTestingSmtp(true)
+                    try {
+                      const res = await fetch("/api/smtp-test", { method: "POST" })
+                      const data = await res.json()
+                      if (res.ok) {
+                        toast({ title: "Erfolg", description: "SMTP-Verbindung erfolgreich hergestellt." })
+                      } else {
+                        toast({ title: "Fehler", description: data.error || "Verbindung fehlgeschlagen.", variant: "destructive" })
+                      }
+                    } catch {
+                      toast({ title: "Fehler", description: "Test fehlgeschlagen.", variant: "destructive" })
+                    } finally {
+                      setTestingSmtp(false)
+                    }
+                  }}
+                  disabled={testingSmtp}
+                >
+                  {testingSmtp ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Mail className="mr-2 h-4 w-4" />
+                  )}
+                  Verbindung testen
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

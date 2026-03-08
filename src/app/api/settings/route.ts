@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { authOptions, requireAdmin } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 
 export const dynamic = "force-dynamic"
@@ -18,6 +18,13 @@ const SETTING_KEYS = [
   "elevenlabs_voice_name_1", // Display name for voice 1 (used as speaker marker)
   "elevenlabs_voice_name_2", // Display name for voice 2 (used as speaker marker)
   "elevenlabs_model",    // ElevenLabs model ID
+  "smtp_host",           // SMTP server hostname
+  "smtp_port",           // SMTP server port
+  "smtp_user",           // SMTP username
+  "smtp_pass",           // SMTP password
+  "smtp_from_email",     // From email address
+  "smtp_from_name",      // From display name
+  "smtp_secure",         // Use SSL/TLS ("true" | "false")
 ] as const
 
 // Defaults
@@ -53,8 +60,9 @@ Erstelle daraus ein zusammenhaengendes, unterhaltsames Podcast-Skript.`,
 
 export async function GET() {
   const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 })
+  const adminError = requireAdmin(session)
+  if (adminError) {
+    return NextResponse.json({ error: adminError.error }, { status: adminError.status })
   }
 
   const settings = await prisma.appSetting.findMany({
@@ -66,29 +74,20 @@ export async function GET() {
     result[s.key] = s.value
   }
 
-  // Mask API keys for security
-  if (result.llm_api_key) {
-    const key = result.llm_api_key
-    result.llm_api_key_masked = key.length > 8
-      ? key.slice(0, 4) + "..." + key.slice(-4)
-      : "****"
-    result.llm_api_key = "" // Don't send the actual key
-    result.llm_api_key_set = "true"
-  } else {
-    result.llm_api_key_set = "false"
-    result.llm_api_key_masked = ""
-  }
-
-  if (result.elevenlabs_api_key) {
-    const key = result.elevenlabs_api_key
-    result.elevenlabs_api_key_masked = key.length > 8
-      ? key.slice(0, 4) + "..." + key.slice(-4)
-      : "****"
-    result.elevenlabs_api_key = ""
-    result.elevenlabs_api_key_set = "true"
-  } else {
-    result.elevenlabs_api_key_set = "false"
-    result.elevenlabs_api_key_masked = ""
+  // Mask API keys and passwords for security
+  const secretKeys = ["llm_api_key", "elevenlabs_api_key", "smtp_pass"] as const
+  for (const keyName of secretKeys) {
+    if (result[keyName]) {
+      const val = result[keyName]
+      result[`${keyName}_masked`] = val.length > 8
+        ? val.slice(0, 4) + "..." + val.slice(-4)
+        : "****"
+      result[keyName] = ""
+      result[`${keyName}_set`] = "true"
+    } else {
+      result[`${keyName}_set`] = "false"
+      result[`${keyName}_masked`] = ""
+    }
   }
 
   return NextResponse.json(result)
@@ -96,8 +95,9 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 })
+  const adminError = requireAdmin(session)
+  if (adminError) {
+    return NextResponse.json({ error: adminError.error }, { status: adminError.status })
   }
 
   const body = await request.json()
@@ -106,8 +106,8 @@ export async function PUT(request: NextRequest) {
 
   for (const key of SETTING_KEYS) {
     if (key in body && body[key] !== undefined && body[key] !== null) {
-      // Don't overwrite API key with empty string (means "keep existing")
-      if ((key === "llm_api_key" || key === "elevenlabs_api_key") && body[key] === "") {
+      // Don't overwrite secrets with empty string (means "keep existing")
+      if ((key === "llm_api_key" || key === "elevenlabs_api_key" || key === "smtp_pass") && body[key] === "") {
         continue
       }
       updates.push({ key, value: String(body[key]) })

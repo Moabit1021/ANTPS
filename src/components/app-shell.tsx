@@ -6,19 +6,24 @@ import { useEffect } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { Toaster } from "@/components/ui/toaster"
 
+// Pages that don't require authentication
+const PUBLIC_PATHS = ["/login", "/register"]
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { status } = useSession()
   const pathname = usePathname()
   const router = useRouter()
 
+  const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p))
+
   useEffect(() => {
-    if (status === "unauthenticated" && pathname !== "/login") {
+    if (status === "unauthenticated" && !isPublicPath) {
       router.push("/login")
     }
-  }, [status, pathname, router])
+  }, [status, isPublicPath, router])
 
-  // Show login page without sidebar
-  if (pathname === "/login") {
+  // Show public pages without sidebar
+  if (isPublicPath) {
     return (
       <>
         {children}
