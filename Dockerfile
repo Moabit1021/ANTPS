@@ -26,6 +26,7 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/docker-entrypoint.sh ./docker-entrypoint.sh
 
 RUN mkdir -p /app/data/audio /app/data/uploads /app/data/feed
 RUN chown -R nextjs:nodejs /app/data
@@ -35,4 +36,4 @@ VOLUME ["/app/data"]
 USER nextjs
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma db push --skip-generate && node prisma/seed-prod.js && node server.js"]
+CMD ["sh", "./docker-entrypoint.sh"]
