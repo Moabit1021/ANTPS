@@ -28,6 +28,8 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/bcrypt ./node_modules/bcrypt
 COPY --from=builder /app/node_modules/effect ./node_modules/effect
+COPY --from=builder /app/node_modules/@standard-schema ./node_modules/@standard-schema
+COPY --from=builder /app/node_modules/fast-check ./node_modules/fast-check
 COPY --from=builder /app/package.json ./package.json
 
 RUN mkdir -p /app/data/audio /app/data/uploads /app/data/feed
