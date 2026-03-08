@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "@/components/ui/use-toast"
-import { Loader2, Save, Eye, EyeOff, RefreshCw } from "lucide-react"
+import { Loader2, Save, Eye, EyeOff, RefreshCw, Copy, Check } from "lucide-react"
 
 interface Settings {
   llm_provider: string
@@ -80,6 +80,16 @@ export default function SettingsPage() {
   const [systemPrompt, setSystemPrompt] = useState("")
   const [userTemplate, setUserTemplate] = useState("")
 
+  // Form state - Feed Config
+  const [feedTitle, setFeedTitle] = useState("PodBrief")
+  const [feedDescription, setFeedDescription] = useState("")
+  const [feedAuthor, setFeedAuthor] = useState("PodBrief")
+  const [feedLanguage, setFeedLanguage] = useState("de")
+  const [feedImageUrl, setFeedImageUrl] = useState("")
+  const [feedLoading, setFeedLoading] = useState(false)
+  const [feedSaving, setFeedSaving] = useState(false)
+  const [feedUrlCopied, setFeedUrlCopied] = useState(false)
+
   // Form state - ElevenLabs
   const [elevenlabsKey, setElevenlabsKey] = useState("")
   const [showElevenlabsKey, setShowElevenlabsKey] = useState(false)
@@ -113,9 +123,28 @@ export default function SettingsPage() {
     }
   }, [])
 
+  const fetchFeedConfig = useCallback(async () => {
+    setFeedLoading(true)
+    try {
+      const res = await fetch("/api/feed/config")
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setFeedTitle(data.title || "PodBrief")
+      setFeedDescription(data.description || "")
+      setFeedAuthor(data.author || "PodBrief")
+      setFeedLanguage(data.language || "de")
+      setFeedImageUrl(data.imageUrl || "")
+    } catch {
+      // Feed config might not exist yet, that's ok
+    } finally {
+      setFeedLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchSettings()
-  }, [fetchSettings])
+    fetchFeedConfig()
+  }, [fetchSettings, fetchFeedConfig])
 
   const handleProviderChange = (newProvider: string) => {
     setProvider(newProvider)
@@ -186,6 +215,36 @@ export default function SettingsPage() {
     }
   }
 
+  const handleSaveFeed = async () => {
+    setFeedSaving(true)
+    try {
+      const res = await fetch("/api/feed/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: feedTitle,
+          description: feedDescription,
+          author: feedAuthor,
+          language: feedLanguage,
+          imageUrl: feedImageUrl,
+        }),
+      })
+      if (!res.ok) throw new Error()
+      toast({ title: "Gespeichert", description: "Feed-Konfiguration wurde aktualisiert." })
+    } catch {
+      toast({ title: "Fehler", description: "Feed-Konfiguration konnte nicht gespeichert werden.", variant: "destructive" })
+    } finally {
+      setFeedSaving(false)
+    }
+  }
+
+  const copyFeedUrl = () => {
+    const url = `${window.location.origin}/api/feed`
+    navigator.clipboard.writeText(url)
+    setFeedUrlCopied(true)
+    setTimeout(() => setFeedUrlCopied(false), 2000)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -208,6 +267,7 @@ export default function SettingsPage() {
           <TabsTrigger value="llm">KI-Modell</TabsTrigger>
           <TabsTrigger value="prompts">Prompts</TabsTrigger>
           <TabsTrigger value="tts">Sprachsynthese</TabsTrigger>
+          <TabsTrigger value="feed">Podcast-Feed</TabsTrigger>
         </TabsList>
 
         {/* LLM Configuration Tab */}
@@ -481,6 +541,119 @@ export default function SettingsPage() {
                   Bei einem Dialog-Podcast muss das Skript Sprecher-Marker enthalten, z.B. <code className="bg-muted px-1 py-0.5 rounded">[{voiceName1}]</code> und <code className="bg-muted px-1 py-0.5 rounded">[{voiceName2}]</code> oder <code className="bg-muted px-1 py-0.5 rounded">{voiceName1}:</code> und <code className="bg-muted px-1 py-0.5 rounded">{voiceName2}:</code>.
                 </p>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Feed Configuration Tab */}
+        <TabsContent value="feed" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Feed-URL</CardTitle>
+              <CardDescription>
+                Diese URL koennen Podcast-Apps abonnieren, um neue Episoden automatisch zu erhalten.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <Input
+                  readOnly
+                  value={typeof window !== "undefined" ? `${window.location.origin}/api/feed` : "/api/feed"}
+                  className="font-mono text-sm bg-muted"
+                />
+                <Button variant="outline" size="icon" onClick={copyFeedUrl}>
+                  {feedUrlCopied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Fuer personalisierte Feed-URLs koennen Sie Abonnenten unter &quot;Abonnenten&quot; anlegen.
+                Deren persoenliche URLs enthalten einen Token: /api/feed?token=...
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Podcast-Metadaten</CardTitle>
+              <CardDescription>
+                Diese Informationen erscheinen in Podcast-Apps und im RSS-Feed.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {feedLoading ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label>Podcast-Titel</Label>
+                    <Input
+                      value={feedTitle}
+                      onChange={(e) => setFeedTitle(e.target.value)}
+                      placeholder="z.B. PodBrief"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Beschreibung</Label>
+                    <Textarea
+                      value={feedDescription}
+                      onChange={(e) => setFeedDescription(e.target.value)}
+                      rows={3}
+                      placeholder="Kurze Beschreibung des Podcasts..."
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Autor</Label>
+                      <Input
+                        value={feedAuthor}
+                        onChange={(e) => setFeedAuthor(e.target.value)}
+                        placeholder="z.B. PodBrief"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Sprache</Label>
+                      <Select value={feedLanguage} onValueChange={setFeedLanguage}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="de">Deutsch</SelectItem>
+                          <SelectItem value="en">English</SelectItem>
+                          <SelectItem value="fr">Français</SelectItem>
+                          <SelectItem value="es">Español</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Cover-Bild URL (optional)</Label>
+                    <Input
+                      value={feedImageUrl}
+                      onChange={(e) => setFeedImageUrl(e.target.value)}
+                      placeholder="https://example.com/cover.jpg"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Empfohlen: 1400x1400px bis 3000x3000px, JPEG oder PNG
+                    </p>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button onClick={handleSaveFeed} disabled={feedSaving}>
+                      {feedSaving ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="mr-2 h-4 w-4" />
+                      )}
+                      Feed-Konfiguration speichern
+                    </Button>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
       take: limit,
       include: {
         script: { select: { id: true, title: true } },
+        episode: { select: { id: true } },
       },
     }),
     prisma.podcastAudio.count(),
