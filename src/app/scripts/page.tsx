@@ -11,9 +11,13 @@ import { Card } from "@/components/ui/card"
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@/components/ui/select"
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogDescription, DialogFooter,
+} from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
-import { Loader2 } from "lucide-react"
+import { Loader2, Trash2, GitBranch } from "lucide-react"
 
 type ScriptStatus = "GENERATING" | "DRAFT" | "REVISING" | "APPROVED" | "AUDIO_PENDING" | "COMPLETED"
 
@@ -22,11 +26,14 @@ interface Script {
   title: string
   status: ScriptStatus
   modelUsed: string | null
-  promptTokens: number | null
-  outputTokens: number | null
   createdAt: string
   updatedAt: string
   sources: { source: { id: string; title: string; type: string } }[]
+  versionCount: number
+  latestVersionId: string
+  latestVersion: number
+  latestStatus: ScriptStatus
+  latestDate: string
 }
 
 const STATUS_LABELS: Record<ScriptStatus, string> = {
@@ -49,10 +56,9 @@ function statusBadgeClass(status: ScriptStatus): string {
   }
 }
 
-function formatDate(iso: string): string {
+function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString("de-DE", {
     day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
   })
 }
 
@@ -64,6 +70,11 @@ export default function ScriptsPage() {
   const [page, setPage] = useState(1)
   const limit = 20
   const totalPages = Math.max(1, Math.ceil(total / limit))
+
+  // Delete dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletingScript, setDeletingScript] = useState<Script | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const fetchScripts = useCallback(async () => {
     setLoading(true)
@@ -87,6 +98,23 @@ export default function ScriptsPage() {
 
   useEffect(() => { fetchScripts() }, [fetchScripts])
   useEffect(() => { setPage(1) }, [filterStatus])
+
+  const handleDelete = async () => {
+    if (!deletingScript) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/scripts/${deletingScript.id}?mode=all`, { method: "DELETE" })
+      if (!res.ok) throw new Error()
+      toast({ title: "Geloescht", description: "Skript und alle Versionen wurden geloescht." })
+      setDeleteDialogOpen(false)
+      setDeletingScript(null)
+      fetchScripts()
+    } catch {
+      toast({ title: "Fehler", description: "Loeschen fehlgeschlagen.", variant: "destructive" })
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -123,50 +151,74 @@ export default function ScriptsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[140px]">Datum</TableHead>
               <TableHead>Titel</TableHead>
-              <TableHead className="w-[100px]">Quellen</TableHead>
+              <TableHead className="w-[100px]">Versionen</TableHead>
               <TableHead className="w-[140px]">Status</TableHead>
-              <TableHead className="w-[140px]">Modell</TableHead>
+              <TableHead className="w-[120px]">Erstellt</TableHead>
+              <TableHead className="w-[120px]">Letzte Aenderung</TableHead>
+              <TableHead className="w-[60px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">
+                <TableCell colSpan={6} className="text-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                 </TableCell>
               </TableRow>
             ) : scripts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                   Keine Skripte vorhanden. Erstellen Sie ein neues Skript aus Ihren Quellen.
                 </TableCell>
               </TableRow>
             ) : (
               scripts.map((script) => (
                 <TableRow key={script.id}>
-                  <TableCell className="text-sm whitespace-nowrap">
-                    {formatDate(script.createdAt)}
-                  </TableCell>
-                  <TableCell className="font-medium">
+                  <TableCell>
                     <Link
-                      href={`/scripts/${script.id}`}
-                      className="hover:underline"
+                      href={`/scripts/${script.latestVersionId}`}
+                      className="font-medium hover:underline"
                     >
                       {script.title}
                     </Link>
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {script.sources.length}
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {script.sources.map((s) => s.source.title).join(", ") || "Keine Quellen"}
+                    </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={statusBadgeClass(script.status)}>
-                      {STATUS_LABELS[script.status]}
+                    {script.versionCount > 1 ? (
+                      <div className="flex items-center gap-1 text-sm">
+                        <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>{script.versionCount}</span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">1</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={statusBadgeClass(script.latestStatus)}>
+                      {STATUS_LABELS[script.latestStatus]}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {script.modelUsed || "—"}
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                    {formatShortDate(script.createdAt)}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                    {formatShortDate(script.latestDate)}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => {
+                        setDeletingScript(script)
+                        setDeleteDialogOpen(true)
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))
@@ -188,6 +240,28 @@ export default function ScriptsPage() {
           </Button>
         </div>
       )}
+
+      {/* Delete dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Skript loeschen</DialogTitle>
+            <DialogDescription>
+              Sind Sie sicher, dass Sie &quot;{deletingScript?.title}&quot; und alle {deletingScript?.versionCount ?? 1} Version{(deletingScript?.versionCount ?? 1) !== 1 ? "en" : ""} endgueltig loeschen moechten?
+              {(deletingScript?.versionCount ?? 1) > 1 && " Alle Versionen, zugehoerige Audio-Dateien und Episoden werden ebenfalls geloescht."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+              Abbrechen
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Alles loeschen
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

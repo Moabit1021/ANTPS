@@ -123,7 +123,7 @@ enum AudioStatus {
 model PodcastEpisode {
   id            String        @id @default(cuid())
   audioId       String        @unique
-  audio         PodcastAudio  @relation(fields: [audioId], references: [id])
+  audio         PodcastAudio  @relation(fields: [audioId], references: [id], onDelete: Cascade)
   title         String
   description   String
   episodeNumber Int

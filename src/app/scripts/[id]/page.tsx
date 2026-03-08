@@ -89,6 +89,9 @@ export default function ScriptDetailPage({
   const [saving, setSaving] = useState(false)
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteMode, setDeleteMode] = useState<"all" | "single">("all")
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  const [deleteTargetVersion, setDeleteTargetVersion] = useState<number | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -157,18 +160,44 @@ export default function ScriptDetailPage({
     }
   }
 
+  const openDeleteDialog = (mode: "all" | "single", targetId?: string, targetVersion?: number) => {
+    setDeleteMode(mode)
+    setDeleteTargetId(targetId || script?.id || null)
+    setDeleteTargetVersion(targetVersion ?? null)
+    setDeleteDialogOpen(true)
+  }
+
   const handleDelete = async () => {
-    if (!script) return
+    const targetId = deleteMode === "single" ? deleteTargetId : script?.id
+    if (!targetId) return
     setDeleting(true)
     try {
-      const res = await fetch(`/api/scripts/${script.id}`, { method: "DELETE" })
+      const res = await fetch(`/api/scripts/${targetId}?mode=${deleteMode}`, { method: "DELETE" })
       if (!res.ok) throw new Error()
-      toast({ title: "Geloescht", description: "Skript wurde geloescht." })
-      router.push("/scripts")
+
+      if (deleteMode === "all") {
+        toast({ title: "Geloescht", description: "Skript und alle Versionen wurden geloescht." })
+        router.push("/scripts")
+      } else {
+        toast({ title: "Geloescht", description: `Version ${deleteTargetVersion} wurde geloescht.` })
+        setDeleteDialogOpen(false)
+        // If we deleted the current version, navigate to another version
+        if (targetId === script?.id) {
+          const otherVersion = versions.find((v) => v.id !== targetId)
+          if (otherVersion) {
+            router.push(`/scripts/${otherVersion.id}`)
+            fetchScript(otherVersion.id)
+          } else {
+            router.push("/scripts")
+          }
+        } else {
+          fetchScript(script!.id)
+        }
+      }
     } catch {
       toast({ title: "Fehler", description: "Loeschen fehlgeschlagen.", variant: "destructive" })
+    } finally {
       setDeleting(false)
-      setDeleteDialogOpen(false)
     }
   }
 
@@ -321,8 +350,8 @@ export default function ScriptDetailPage({
               <Pencil className="mr-2 h-4 w-4" /> Bearbeiten
             </Button>
           )}
-          <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
-            <Trash2 className="mr-2 h-4 w-4" /> Loeschen
+          <Button variant="destructive" onClick={() => openDeleteDialog("all")}>
+            <Trash2 className="mr-2 h-4 w-4" /> Alle loeschen
           </Button>
         </div>
       </div>
@@ -376,33 +405,55 @@ export default function ScriptDetailPage({
                 const isCurrent = v.id === script.id
                 const revInstr = (v.config as { revisionInstructions?: string } | null)?.revisionInstructions
                 return (
-                  <button
+                  <div
                     key={v.id}
-                    onClick={() => !isCurrent && switchToVersion(v.id)}
                     className={`relative flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors ${
                       isCurrent
                         ? "border-primary bg-primary/5 ring-2 ring-primary"
-                        : "hover:bg-muted/50 cursor-pointer"
+                        : "hover:bg-muted/50"
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">V{v.version}</span>
-                      <Badge variant="outline" className={`text-xs ${statusClass(v.status)}`}>
-                        {STATUS_LABELS[v.status] || v.status}
-                      </Badge>
-                      {isCurrent && (
-                        <Badge variant="default" className="text-xs">Aktuell</Badge>
+                    <div className="flex items-center gap-2 w-full">
+                      <button
+                        onClick={() => !isCurrent && switchToVersion(v.id)}
+                        className={`flex items-center gap-2 ${!isCurrent ? "cursor-pointer" : ""}`}
+                      >
+                        <span className="font-medium text-sm">V{v.version}</span>
+                        <Badge variant="outline" className={`text-xs ${statusClass(v.status)}`}>
+                          {STATUS_LABELS[v.status] || v.status}
+                        </Badge>
+                        {isCurrent && (
+                          <Badge variant="default" className="text-xs">Aktuell</Badge>
+                        )}
+                      </button>
+                      {versions.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 ml-auto text-destructive hover:text-destructive shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openDeleteDialog("single", v.id, v.version)
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       )}
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {formatDate(v.createdAt)}
-                    </span>
-                    {revInstr && (
-                      <span className="text-xs text-muted-foreground italic line-clamp-1 max-w-[200px]">
-                        &quot;{revInstr}&quot;
+                    <button
+                      onClick={() => !isCurrent && switchToVersion(v.id)}
+                      className={!isCurrent ? "cursor-pointer" : ""}
+                    >
+                      <span className="text-xs text-muted-foreground">
+                        {formatDate(v.createdAt)}
                       </span>
-                    )}
-                  </button>
+                      {revInstr && (
+                        <span className="block text-xs text-muted-foreground italic line-clamp-1 max-w-[200px]">
+                          &quot;{revInstr}&quot;
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 )
               })}
             </div>
@@ -507,9 +558,14 @@ export default function ScriptDetailPage({
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Skript loeschen</DialogTitle>
+            <DialogTitle>
+              {deleteMode === "all" ? "Skript komplett loeschen" : `Version ${deleteTargetVersion} loeschen`}
+            </DialogTitle>
             <DialogDescription>
-              Sind Sie sicher, dass Sie &quot;{script.title}&quot; endgueltig loeschen moechten?
+              {deleteMode === "all"
+                ? `Sind Sie sicher, dass Sie "${script.title}" und alle ${versions.length} Versionen endgueltig loeschen moechten? Zugehoerige Audio-Dateien und Episoden werden ebenfalls geloescht.`
+                : `Moechten Sie Version ${deleteTargetVersion} dieses Skripts loeschen? Die anderen Versionen bleiben erhalten.`
+              }
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -518,7 +574,7 @@ export default function ScriptDetailPage({
             </Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
               {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-              Loeschen
+              {deleteMode === "all" ? "Alles loeschen" : "Version loeschen"}
             </Button>
           </DialogFooter>
         </DialogContent>

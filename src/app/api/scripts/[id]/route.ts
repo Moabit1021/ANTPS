@@ -121,7 +121,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions)
@@ -130,8 +130,56 @@ export async function DELETE(
   }
 
   const { id } = await params
+  const { searchParams } = request.nextUrl
+  const mode = searchParams.get("mode") // "single" or "all" (default: "all")
 
-  await prisma.podcastScript.delete({ where: { id } })
+  if (mode === "single") {
+    // Delete only this single version, re-link children to parent
+    const script = await prisma.podcastScript.findUnique({
+      where: { id },
+      select: { parentId: true },
+    })
+    if (script) {
+      // Point any children of this script to this script's parent
+      await prisma.podcastScript.updateMany({
+        where: { parentId: id },
+        data: { parentId: script.parentId },
+      })
+    }
+    await prisma.podcastScript.delete({ where: { id } })
+  } else {
+    // Delete this script and all versions in the chain
+    // First find the root
+    let rootId = id
+    let current = await prisma.podcastScript.findUnique({
+      where: { id },
+      select: { parentId: true },
+    })
+    while (current?.parentId) {
+      rootId = current.parentId
+      current = await prisma.podcastScript.findUnique({
+        where: { id: rootId },
+        select: { parentId: true },
+      })
+    }
+
+    // Collect all IDs in the version chain
+    const allIds = new Set<string>([rootId])
+    let frontier = [rootId]
+    while (frontier.length > 0) {
+      const children = await prisma.podcastScript.findMany({
+        where: { parentId: { in: frontier } },
+        select: { id: true },
+      })
+      frontier = children.map((c) => c.id).filter((cid) => !allIds.has(cid))
+      frontier.forEach((cid) => allIds.add(cid))
+    }
+
+    // Delete all scripts in the chain (cascades handle audio/episodes)
+    await prisma.podcastScript.deleteMany({
+      where: { id: { in: Array.from(allIds) } },
+    })
+  }
 
   return NextResponse.json({ success: true })
 }
