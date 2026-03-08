@@ -3,14 +3,21 @@
 import { useState, useEffect, useCallback, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Loader2, Sparkles } from "lucide-react"
+import { ArrowLeft, Loader2, Sparkles, ChevronDown, ChevronUp } from "lucide-react"
 
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select"
 import { toast } from "@/components/ui/use-toast"
 
 interface Source {
@@ -22,6 +29,42 @@ interface Source {
   summary: string | null
 }
 
+interface PromptConfig {
+  systemPrompt: string
+  userTemplate: string
+  voiceName1: string
+  voiceName2: string
+  speakerModeMonolog: string
+  speakerModeDialog: string
+}
+
+function resolvePromptPreview(
+  template: string,
+  vars: {
+    speakers: number
+    duration: number
+    date: string
+    voiceName1: string
+    voiceName2: string
+    speakerModeMonolog: string
+    speakerModeDialog: string
+  }
+): string {
+  const speakerMode = vars.speakers === 1
+    ? vars.speakerModeMonolog
+        .replace(/\{\{voice_name_1\}\}/g, vars.voiceName1)
+    : vars.speakerModeDialog
+        .replace(/\{\{voice_name_1\}\}/g, vars.voiceName1)
+        .replace(/\{\{voice_name_2\}\}/g, vars.voiceName2)
+
+  return template
+    .replace(/\{\{speaker_mode\}\}/g, speakerMode)
+    .replace(/\{\{duration\}\}/g, String(vars.duration))
+    .replace(/\{\{date\}\}/g, vars.date)
+    .replace(/\{\{voice_name_1\}\}/g, vars.voiceName1)
+    .replace(/\{\{voice_name_2\}\}/g, vars.voiceName2)
+}
+
 function NewScriptContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -29,10 +72,23 @@ function NewScriptContent() {
   const [sources, setSources] = useState<Source[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [title, setTitle] = useState(
-    `Podcast vom ${new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}`
-  )
+  const [title, setTitle] = useState("")
   const [generating, setGenerating] = useState(false)
+
+  // Config options
+  const [speakers, setSpeakers] = useState("2")
+  const [duration, setDuration] = useState("10")
+
+  // Prompt state
+  const [promptConfig, setPromptConfig] = useState<PromptConfig | null>(null)
+  const [systemPrompt, setSystemPrompt] = useState("")
+  const [userTemplate, setUserTemplate] = useState("")
+  const [promptExpanded, setPromptExpanded] = useState(false)
+  const [promptEdited, setPromptEdited] = useState(false)
+
+  const todayDate = new Date().toLocaleDateString("de-DE", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+  })
 
   // Pre-select sources from URL params
   useEffect(() => {
@@ -42,20 +98,56 @@ function NewScriptContent() {
     }
   }, [searchParams])
 
-  const fetchSources = useCallback(async () => {
+  // Fetch sources and prompts in parallel
+  const fetchData = useCallback(async () => {
     try {
-      const res = await fetch("/api/sources?limit=100&sort=desc")
-      if (!res.ok) throw new Error()
-      const data = await res.json()
-      setSources(data.sources)
+      const [sourcesRes, promptsRes] = await Promise.all([
+        fetch("/api/sources?limit=100&sort=desc"),
+        fetch("/api/prompts"),
+      ])
+
+      if (sourcesRes.ok) {
+        const data = await sourcesRes.json()
+        setSources(data.sources)
+      }
+
+      if (promptsRes.ok) {
+        const data: PromptConfig = await promptsRes.json()
+        setPromptConfig(data)
+        // Resolve with default values initially
+        setSystemPrompt(resolvePromptPreview(data.systemPrompt, {
+          speakers: 2,
+          duration: 10,
+          date: new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
+          voiceName1: data.voiceName1,
+          voiceName2: data.voiceName2,
+          speakerModeMonolog: data.speakerModeMonolog,
+          speakerModeDialog: data.speakerModeDialog,
+        }))
+        setUserTemplate(data.userTemplate)
+      }
     } catch {
-      toast({ title: "Fehler", description: "Quellen konnten nicht geladen werden.", variant: "destructive" })
+      toast({ title: "Fehler", description: "Daten konnten nicht geladen werden.", variant: "destructive" })
     } finally {
       setLoading(false)
     }
   }, [])
 
-  useEffect(() => { fetchSources() }, [fetchSources])
+  useEffect(() => { fetchData() }, [fetchData])
+
+  // Re-resolve prompt when speakers or duration change (only if not manually edited)
+  useEffect(() => {
+    if (!promptConfig || promptEdited) return
+    setSystemPrompt(resolvePromptPreview(promptConfig.systemPrompt, {
+      speakers: parseInt(speakers),
+      duration: parseInt(duration),
+      date: todayDate,
+      voiceName1: promptConfig.voiceName1,
+      voiceName2: promptConfig.voiceName2,
+      speakerModeMonolog: promptConfig.speakerModeMonolog,
+      speakerModeDialog: promptConfig.speakerModeDialog,
+    }))
+  }, [speakers, duration, promptConfig, promptEdited, todayDate])
 
   const toggleSource = (id: string) => {
     setSelectedIds((prev) => {
@@ -80,6 +172,10 @@ function NewScriptContent() {
         body: JSON.stringify({
           sourceIds: Array.from(selectedIds),
           title: title.trim() || undefined,
+          speakers: parseInt(speakers),
+          duration: parseInt(duration),
+          systemPrompt: promptEdited ? systemPrompt : undefined,
+          userTemplate: promptEdited ? userTemplate : undefined,
         }),
       })
 
@@ -91,7 +187,6 @@ function NewScriptContent() {
           description: data.error || "Skript-Generierung fehlgeschlagen.",
           variant: "destructive",
         })
-        // If a script was created despite the error, navigate to it
         if (data.scriptId) {
           router.push(`/scripts/${data.scriptId}`)
         }
@@ -107,7 +202,22 @@ function NewScriptContent() {
     }
   }
 
-  // Filter to only show usable sources (NEW, READY)
+  const resetPrompt = () => {
+    if (!promptConfig) return
+    setPromptEdited(false)
+    setSystemPrompt(resolvePromptPreview(promptConfig.systemPrompt, {
+      speakers: parseInt(speakers),
+      duration: parseInt(duration),
+      date: todayDate,
+      voiceName1: promptConfig.voiceName1,
+      voiceName2: promptConfig.voiceName2,
+      speakerModeMonolog: promptConfig.speakerModeMonolog,
+      speakerModeDialog: promptConfig.speakerModeDialog,
+    }))
+    setUserTemplate(promptConfig.userTemplate)
+  }
+
+  // Filter to only show usable sources
   const availableSources = sources.filter(
     (s) => s.status === "NEW" || s.status === "READY" || selectedIds.has(s.id)
   )
@@ -125,28 +235,74 @@ function NewScriptContent() {
       <div>
         <h1 className="text-3xl font-bold">Neues Skript erstellen</h1>
         <p className="text-muted-foreground">
-          Waehlen Sie Quellen aus und lassen Sie ein Podcast-Skript generieren.
+          Konfigurieren Sie die Einstellungen und waehlen Sie Quellen aus.
         </p>
       </div>
 
+      {/* Title */}
       <Card>
         <CardHeader>
           <CardTitle>Skript-Titel</CardTitle>
+          <CardDescription>
+            Leer lassen, um einen KI-generierten Titel zu verwenden.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Titel des Podcast-Skripts"
+            placeholder={`z.B. Podcast vom ${todayDate} (wird automatisch vorgeschlagen)`}
           />
         </CardContent>
       </Card>
 
+      {/* Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Konfiguration</CardTitle>
+          <CardDescription>
+            Format und Laenge des Podcast-Skripts.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Sprecher</label>
+              <Select value={speakers} onValueChange={setSpeakers}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1 Sprecher (Monolog)</SelectItem>
+                  <SelectItem value="2">2 Sprecher (Dialog)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Laenge</label>
+              <Select value={duration} onValueChange={setDuration}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">ca. 5 Minuten</SelectItem>
+                  <SelectItem value="10">ca. 10 Minuten</SelectItem>
+                  <SelectItem value="15">ca. 15 Minuten</SelectItem>
+                  <SelectItem value="20">ca. 20 Minuten</SelectItem>
+                  <SelectItem value="30">ca. 30 Minuten</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Sources */}
       <Card>
         <CardHeader>
           <CardTitle>Quellen auswaehlen</CardTitle>
           <CardDescription>
-            Waehlen Sie die Newsletter-Quellen, aus denen das Skript erstellt werden soll.
+            Waehlen Sie die Quellen, aus denen das Skript erstellt werden soll.
             {selectedIds.size > 0 && (
               <span className="ml-2 font-medium text-foreground">
                 {selectedIds.size} ausgewaehlt
@@ -161,7 +317,7 @@ function NewScriptContent() {
             </div>
           ) : availableSources.length === 0 ? (
             <p className="text-muted-foreground py-4">
-              Keine verfuegbaren Quellen. Laden Sie zuerst Newsletter als PDF hoch oder fuegen Sie Text hinzu.
+              Keine verfuegbaren Quellen. Laden Sie zuerst Dokumente hoch oder fuegen Sie Text hinzu.
             </p>
           ) : (
             <div className="space-y-2">
@@ -202,6 +358,74 @@ function NewScriptContent() {
         </CardContent>
       </Card>
 
+      {/* Prompt */}
+      <Card>
+        <CardHeader
+          className="cursor-pointer select-none"
+          onClick={() => setPromptExpanded(!promptExpanded)}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                KI-Prompt
+                {promptEdited && (
+                  <Badge variant="outline" className="text-xs bg-yellow-100 text-yellow-800 border-yellow-200">
+                    Angepasst
+                  </Badge>
+                )}
+              </CardTitle>
+              <CardDescription>
+                System-Prompt und Benutzer-Prompt fuer die Skript-Generierung.
+              </CardDescription>
+            </div>
+            {promptExpanded ? (
+              <ChevronUp className="h-5 w-5 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-muted-foreground" />
+            )}
+          </div>
+        </CardHeader>
+        {promptExpanded && (
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">System-Prompt</label>
+              <Textarea
+                value={systemPrompt}
+                onChange={(e) => {
+                  setSystemPrompt(e.target.value)
+                  setPromptEdited(true)
+                }}
+                rows={16}
+                className="font-mono text-xs"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Benutzer-Prompt</label>
+              <p className="text-xs text-muted-foreground">
+                Der Platzhalter {"{{sources}}"} wird durch die ausgewaehlten Quellen ersetzt.
+              </p>
+              <Textarea
+                value={userTemplate}
+                onChange={(e) => {
+                  setUserTemplate(e.target.value)
+                  setPromptEdited(true)
+                }}
+                rows={6}
+                className="font-mono text-xs"
+              />
+            </div>
+            {promptEdited && (
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" onClick={resetPrompt}>
+                  Auf Standard zuruecksetzen
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Generate button */}
       <div className="flex justify-end">
         <Button
           size="lg"

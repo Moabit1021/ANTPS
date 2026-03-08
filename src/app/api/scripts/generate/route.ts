@@ -13,7 +13,21 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { sourceIds, title } = body as { sourceIds: string[]; title?: string }
+  const {
+    sourceIds,
+    title,
+    speakers,
+    duration,
+    systemPrompt,
+    userTemplate,
+  } = body as {
+    sourceIds: string[]
+    title?: string
+    speakers?: number
+    duration?: number
+    systemPrompt?: string
+    userTemplate?: string
+  }
 
   if (!sourceIds || !Array.isArray(sourceIds) || sourceIds.length === 0) {
     return NextResponse.json(
@@ -29,7 +43,7 @@ export async function POST(request: NextRequest) {
 
   if (sources.length === 0) {
     return NextResponse.json(
-      { error: "Keine gültigen Quellen gefunden." },
+      { error: "Keine gueltigen Quellen gefunden." },
       { status: 404 }
     )
   }
@@ -44,6 +58,10 @@ export async function POST(request: NextRequest) {
       title: scriptTitle,
       content: "",
       status: "GENERATING",
+      config: {
+        speakers: speakers || 2,
+        duration: duration || 10,
+      },
       sources: {
         create: sourceIds.map((sourceId) => ({ sourceId })),
       },
@@ -52,19 +70,35 @@ export async function POST(request: NextRequest) {
 
   // Generate script via LLM
   try {
-    const result = await generateScript(
-      sources.map((s) => ({ title: s.title, plainText: s.plainText }))
-    )
+    const result = await generateScript({
+      sources: sources.map((s) => ({ title: s.title, plainText: s.plainText })),
+      speakers,
+      duration,
+      systemPrompt: systemPrompt || undefined,
+      userTemplate: userTemplate || undefined,
+    })
+
+    // Use suggested title if no custom title provided
+    const finalTitle = title
+      ? title
+      : result.suggestedTitle || scriptTitle
 
     // Update script with generated content
     const updated = await prisma.podcastScript.update({
       where: { id: script.id },
       data: {
+        title: finalTitle,
         content: result.content,
         status: "DRAFT",
         modelUsed: result.model,
         promptTokens: result.promptTokens,
         outputTokens: result.outputTokens,
+        config: {
+          speakers: speakers || 2,
+          duration: duration || 10,
+          suggestedTitle: result.suggestedTitle || undefined,
+          suggestedDescription: result.suggestedDescription || undefined,
+        },
       },
       include: {
         sources: {
@@ -81,7 +115,11 @@ export async function POST(request: NextRequest) {
       data: { status: "USED" },
     })
 
-    return NextResponse.json(updated, { status: 201 })
+    return NextResponse.json({
+      ...updated,
+      suggestedTitle: result.suggestedTitle,
+      suggestedDescription: result.suggestedDescription,
+    }, { status: 201 })
   } catch (error) {
     // Update script to show error
     await prisma.podcastScript.update({

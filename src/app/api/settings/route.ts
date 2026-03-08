@@ -31,28 +31,40 @@ const SETTING_KEYS = [
 const DEFAULTS: Record<string, string> = {
   llm_provider: "anthropic",
   llm_model: "claude-sonnet-4-20250514",
-  prompt_system: `Du bist ein erfahrener Podcast-Redakteur. Deine Aufgabe ist es, aus Newsletter-Inhalten ein unterhaltsames und informatives Podcast-Skript zu erstellen.
+  prompt_system: `Du bist ein erfahrener Podcast-Redakteur. Deine Aufgabe ist es, aus den bereitgestellten Quellen ein unterhaltsames und informatives Podcast-Skript zu erstellen.
 
-Das Skript soll:
-- In einem natuerlichen, gesprochenen Deutsch verfasst sein
+Rahmenbedingungen:
+- Heutiges Datum / Datum der Folge: {{date}}
+- Ziellaenge: ca. {{duration}} Minuten Sprechzeit
+{{speaker_mode}}
+
+Inhaltliche Vorgaben:
+- In einem natuerlichen, gesprochenen Deutsch verfasst
 - Die wichtigsten Themen aus den Quellen zusammenfassen und einordnen
-- Einen klaren roten Faden haben (Begruessung, Themen, Abschluss)
-- Fuer eine Laenge von ca. 5-10 Minuten Sprechzeit ausgelegt sein
+- Nenne die Quelle (Name des Newsletters, Dokuments oder Absenders) wenn du ein Thema einfuehrst
 - Fachbegriffe kurz erklaeren, ohne belehrend zu wirken
 - Uebergaenge zwischen Themen natuerlich gestalten
 
 Format des Skripts:
-- Beginne mit einer kurzen Begruessung und Vorschau der Themen
+- Beginne mit einer kurzen Begruessung und nenne das Datum der Folge, gefolgt von einer Vorschau der Themen
+- Die Sprecher stellen sich NICHT namentlich vor
 - Gliedere in Abschnitte mit klaren Uebergaengen
 - Schliesse mit einer Zusammenfassung und Verabschiedung
 - Verwende KEINE Markdown-Formatierung im Skript selbst
-- Schreibe den Text so, wie er vorgelesen werden soll`,
+- Schreibe den Text so, wie er vorgelesen werden soll
 
-  prompt_user_template: `Erstelle ein Podcast-Skript basierend auf den folgenden Newsletter-Quellen:
+Antwortformat:
+Beginne deine Antwort IMMER mit genau drei Zeilen fuer Metadaten, gefolgt von einer Leerzeile und dann dem Skript:
+TITEL: [Vorschlag fuer den Episodentitel, kurz und praegnant]
+BESCHREIBUNG: [2-3 Saetze Zusammenfassung fuer die Episodenbeschreibung]
+---
+[Hier folgt das eigentliche Podcast-Skript]`,
+
+  prompt_user_template: `Erstelle ein Podcast-Skript basierend auf den folgenden Quellen:
 
 {{sources}}
 
-Erstelle daraus ein zusammenhaengendes, unterhaltsames Podcast-Skript.`,
+Erstelle daraus ein zusammenhaengendes, unterhaltsames Podcast-Skript. Denke daran, mit TITEL: und BESCHREIBUNG: zu beginnen.`,
   elevenlabs_model: "eleven_multilingual_v2",
   elevenlabs_voice_name_1: "Alex",
   elevenlabs_voice_name_2: "Kim",
