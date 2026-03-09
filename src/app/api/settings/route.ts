@@ -47,7 +47,8 @@ Inhaltliche Vorgaben:
 
 Format des Skripts:
 - Beginne mit einer kurzen Begruessung und nenne das Datum der Folge, gefolgt von einer Vorschau der Themen
-- Die Sprecher stellen sich NICHT namentlich vor
+- Die Sprecher stellen sich NICHT namentlich vor und verwenden NIEMALS ihre eigenen Namen oder den Namen des anderen Sprechers im gesprochenen Text
+- Die Sprecher-Markierungen in eckigen Klammern (z.B. [Ben]) dienen NUR der technischen Zuordnung zur Stimme und werden NICHT vorgelesen - sie sind KEIN Teil des Dialogs
 - Gliedere in Abschnitte mit klaren Uebergaengen
 - Schliesse mit einer Zusammenfassung und Verabschiedung
 

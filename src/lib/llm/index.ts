@@ -21,7 +21,8 @@ Inhaltliche Vorgaben:
 
 Format des Skripts:
 - Beginne mit einer kurzen Begruessung und nenne das Datum der Folge, gefolgt von einer Vorschau der Themen
-- Die Sprecher stellen sich NICHT namentlich vor
+- Die Sprecher stellen sich NICHT namentlich vor und verwenden NIEMALS ihre eigenen Namen oder den Namen des anderen Sprechers im gesprochenen Text
+- Die Sprecher-Markierungen in eckigen Klammern (z.B. [Ben]) dienen NUR der technischen Zuordnung zur Stimme und werden NICHT vorgelesen - sie sind KEIN Teil des Dialogs
 - Gliedere in Abschnitte mit klaren Uebergaengen
 - Schliesse mit einer Zusammenfassung und Verabschiedung
 
@@ -54,6 +55,7 @@ const SPEAKER_MODE_DIALOG = `- Format: DIALOG zwischen genau zwei Sprechern
 - Markiere JEDEN Sprecherwechsel mit [{{voice_name_1}}] oder [{{voice_name_2}}] am Anfang des Absatzes
 - Verwende NUR diese exakten Markierungen: [{{voice_name_1}}] und [{{voice_name_2}}]
 - Verwende NIEMALS andere Formate wie "Name:", "**Name**", "Mann:", "Frau:" etc.
+- Die Sprecher sagen NIEMALS ihren eigenen Namen oder den Namen des anderen Sprechers im Dialog - sie sprechen sich nicht mit Namen an
 - Gestalte den Dialog natuerlich, nicht wie ein Interview`
 
 const DEFAULT_USER_TEMPLATE = `Erstelle ein Podcast-Skript basierend auf den folgenden Quellen:
