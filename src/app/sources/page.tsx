@@ -34,6 +34,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { toast } from "@/components/ui/use-toast"
+import { Loader2, Trash2 } from "lucide-react"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -163,6 +164,11 @@ export default function SourcesPage() {
   const [manualTitle, setManualTitle] = useState("")
   const [manualText, setManualText] = useState("")
   const [submittingText, setSubmittingText] = useState(false)
+
+  // Delete state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletingSource, setDeletingSource] = useState<Source | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   // Computed
   const totalPages = Math.max(1, Math.ceil(total / limit))
@@ -334,6 +340,34 @@ export default function SourcesPage() {
       toast({ title: "Fehler", description: "Nur PDF-Dateien sind erlaubt.", variant: "destructive" })
     }
   }, [])
+
+  // -------------------------------------------------------------------------
+  // Delete source
+  // -------------------------------------------------------------------------
+
+  const handleDelete = useCallback(async () => {
+    if (!deletingSource) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/sources/${deletingSource.id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || "Loeschen fehlgeschlagen")
+      }
+      toast({ title: "Geloescht", description: "Quelle wurde entfernt." })
+      setDeleteDialogOpen(false)
+      setDeletingSource(null)
+      fetchSources()
+    } catch (e) {
+      toast({
+        title: "Fehler",
+        description: e instanceof Error ? e.message : "Quelle konnte nicht geloescht werden.",
+        variant: "destructive",
+      })
+    } finally {
+      setDeleting(false)
+    }
+  }, [deletingSource, fetchSources])
 
   // -------------------------------------------------------------------------
   // Render
@@ -571,18 +605,19 @@ export default function SourcesPage() {
               <TableHead className="w-[100px]">Typ</TableHead>
               <TableHead className="w-[120px]">Status</TableHead>
               <TableHead>Zusammenfassung</TableHead>
+              <TableHead className="w-[60px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                   Quellen werden geladen…
                 </TableCell>
               </TableRow>
             ) : sources.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                   Keine Quellen gefunden.
                 </TableCell>
               </TableRow>
@@ -617,6 +652,20 @@ export default function SourcesPage() {
                     <TableCell className="text-sm text-muted-foreground">
                       {truncate(source.summary)}
                     </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setDeletingSource(source)
+                          setDeleteDialogOpen(true)
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 )
               })
@@ -624,6 +673,32 @@ export default function SourcesPage() {
           </TableBody>
         </Table>
       </Card>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Quelle loeschen</DialogTitle>
+            <DialogDescription>
+              Die Quelle und alle zugehoerigen Daten werden dauerhaft geloescht.
+              {deletingSource && (
+                <span className="block mt-1 font-medium text-foreground">
+                  {deletingSource.title}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+              Abbrechen
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Loeschen
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Pagination */}
       {!loading && totalPages > 0 && (
