@@ -94,6 +94,25 @@ export function cleanScriptForTTS(
   // Remove lines that look like stage directions in parentheses: (Pause), (Musik), etc.
   cleaned = cleaned.replace(/^\s*\([^)]+\)\s*$/gm, "")
 
+  // Normalize common symbols to spoken words (safety net if LLM didn't)
+  cleaned = cleaned.replace(/(\d)\s*%/g, "$1 Prozent")
+  cleaned = cleaned.replace(/(\d)\s*€/g, "$1 Euro")
+  cleaned = cleaned.replace(/€\s*(\d)/g, "$1 Euro")
+  cleaned = cleaned.replace(/(\d)\s*\$/g, "$1 Dollar")
+  cleaned = cleaned.replace(/§\s*/g, "Paragraph ")
+  cleaned = cleaned.replace(/&/g, " und ")
+  cleaned = cleaned.replace(/\+/g, " plus ")
+
+  // Clean up abbreviations the LLM might have left
+  cleaned = cleaned.replace(/\bz\.B\./g, "zum Beispiel")
+  cleaned = cleaned.replace(/\bd\.h\./g, "das heisst")
+  cleaned = cleaned.replace(/\bu\.a\./g, "unter anderem")
+  cleaned = cleaned.replace(/\busw\./g, "und so weiter")
+  cleaned = cleaned.replace(/\bbzw\./g, "beziehungsweise")
+  cleaned = cleaned.replace(/\bca\./g, "circa")
+  cleaned = cleaned.replace(/\bMio\./g, "Millionen")
+  cleaned = cleaned.replace(/\bMrd\./g, "Milliarden")
+
   // Remove empty lines that resulted from stripping (collapse multiple blank lines)
   cleaned = cleaned.replace(/\n{3,}/g, "\n\n")
 

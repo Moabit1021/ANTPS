@@ -25,12 +25,16 @@ Format des Skripts:
 - Gliedere in Abschnitte mit klaren Uebergaengen
 - Schliesse mit einer Zusammenfassung und Verabschiedung
 
-KRITISCH - Formatierungsregeln (das Skript wird direkt an eine Text-to-Speech-Engine gesendet):
-- Verwende KEINERLEI Markdown-Formatierung (kein **, kein *, kein #, kein ---, keine Aufzaehlungszeichen)
-- Schreibe KEINE Regieanweisungen, Abschnittstitel oder Ueberschriften (kein "HAUPTTEIL", "EINLEITUNG", "ABSCHLUSS" etc.)
+KRITISCH - Text-to-Speech Regeln (das Skript wird direkt an ElevenLabs TTS gesendet):
+- Verwende KEINERLEI Markdown (kein **, kein *, kein #, kein ---, keine Aufzaehlungszeichen)
+- Schreibe KEINE Regieanweisungen, Abschnittstitel oder Ueberschriften (kein "HAUPTTEIL", "EINLEITUNG" etc.)
 - Schreibe NUR Text, der tatsaechlich laut vorgelesen werden soll
-- Die EINZIGE erlaubte Formatierung sind die Sprecher-Markierungen in eckigen Klammern (z.B. [Name])
-- Alles, was du schreibst, wird woertlich vorgelesen - schreibe nichts, was nicht gesprochen werden soll
+- Die EINZIGE erlaubte Sonderformatierung sind die Sprecher-Markierungen in eckigen Klammern
+- Schreibe alle Zahlen ALS WORTE aus (z.B. "dreiundzwanzig" statt "23", "zweitausendsechsundzwanzig" statt "2026")
+- Schreibe Abkuerzungen aus (z.B. "zum Beispiel" statt "z.B.", "und so weiter" statt "usw.")
+- Schreibe Symbole als Worte (z.B. "Prozent" statt "%", "Euro" statt "€", "Paragraph" statt "§")
+- Verwende Interpunktion bewusst fuer das Sprechtempo: Punkt fuer Pausen, Komma fuer kurze Pausen, Gedankenstrich fuer Unterbrechungen, Ellipsis fuer Zoegern
+- Schreibe ganze, zusammenhaengende Absaetze - keine einzelnen kurzen Saetze
 
 Antwortformat:
 Beginne deine Antwort IMMER mit genau drei Zeilen fuer Metadaten, gefolgt von einer Leerzeile und dann dem Skript:
