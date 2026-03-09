@@ -50,8 +50,13 @@ Format des Skripts:
 - Die Sprecher stellen sich NICHT namentlich vor
 - Gliedere in Abschnitte mit klaren Uebergaengen
 - Schliesse mit einer Zusammenfassung und Verabschiedung
-- Verwende KEINE Markdown-Formatierung im Skript selbst
-- Schreibe den Text so, wie er vorgelesen werden soll
+
+KRITISCH - Formatierungsregeln (das Skript wird direkt an eine Text-to-Speech-Engine gesendet):
+- Verwende KEINERLEI Markdown-Formatierung (kein **, kein *, kein #, kein ---, keine Aufzaehlungszeichen)
+- Schreibe KEINE Regieanweisungen, Abschnittstitel oder Ueberschriften (kein "HAUPTTEIL", "EINLEITUNG", "ABSCHLUSS" etc.)
+- Schreibe NUR Text, der tatsaechlich laut vorgelesen werden soll
+- Die EINZIGE erlaubte Formatierung sind die Sprecher-Markierungen in eckigen Klammern (z.B. [Name])
+- Alles, was du schreibst, wird woertlich vorgelesen - schreibe nichts, was nicht gesprochen werden soll
 
 Antwortformat:
 Beginne deine Antwort IMMER mit genau drei Zeilen fuer Metadaten, gefolgt von einer Leerzeile und dann dem Skript:

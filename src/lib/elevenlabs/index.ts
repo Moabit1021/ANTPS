@@ -45,6 +45,61 @@ export interface TTSResult {
   contentType: string
 }
 
+// ---- Script cleaning for TTS ----
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+/**
+ * Cleans a script before sending to TTS.
+ * Removes markdown formatting, section headers, stage directions,
+ * and normalizes speaker markers to the [Name] format.
+ */
+export function cleanScriptForTTS(
+  content: string,
+  speakerNames: string[]
+): string {
+  let cleaned = content
+
+  // Normalize "Name:" or "**Name**:" format to [Name] for known speakers
+  // Must happen BEFORE stripping markdown so we can match **Name**:
+  for (const name of speakerNames) {
+    // Match variations: "Name:", "**Name**:", "**Name:**", "  Name : "
+    const namePattern = new RegExp(
+      `^\\s*(?:\\*\\*)?\\s*${escapeRegex(name)}\\s*(?:\\*\\*)?\\s*:\\s*`,
+      "gim"
+    )
+    cleaned = cleaned.replace(namePattern, `[${name}] `)
+  }
+
+  // Remove markdown bold/italic: **text** -> text, *text* -> text
+  // But preserve [Name] markers (which don't contain **)
+  cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, "$1")
+  cleaned = cleaned.replace(/(?<!\[)\*([^*]+)\*(?!\])/g, "$1")
+
+  // Remove markdown headers: # text, ## text, etc.
+  cleaned = cleaned.replace(/^#{1,6}\s+/gm, "")
+
+  // Remove horizontal rules: ---, ***, ___
+  cleaned = cleaned.replace(/^[-*_]{3,}\s*$/gm, "")
+
+  // Remove markdown bullet points at start of lines
+  cleaned = cleaned.replace(/^\s*[-*]\s+/gm, "")
+
+  // Remove lines that are ONLY section headers / stage directions
+  // (all-caps words like HAUPTTEIL, EINLEITUNG, ABSCHLUSS, ENDE, INTRO, OUTRO)
+  cleaned = cleaned.replace(/^\s*[A-ZÄÖÜ][A-ZÄÖÜ\s\-:.,!?]{2,}\s*$/gm, "")
+
+  // Remove lines that look like stage directions in parentheses: (Pause), (Musik), etc.
+  cleaned = cleaned.replace(/^\s*\([^)]+\)\s*$/gm, "")
+
+  // Remove empty lines that resulted from stripping (collapse multiple blank lines)
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n")
+
+  return cleaned.trim()
+}
+
 // ---- Script parsing for multi-voice ----
 
 export interface ScriptSegment {
@@ -127,10 +182,6 @@ export function parseScriptSegments(
   return segments
 }
 
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-}
-
 // ---- TTS generation ----
 
 async function generateSegmentAudio(
@@ -172,6 +223,7 @@ async function generateSegmentAudio(
 
 /**
  * Generate audio for a single-voice script.
+ * Cleans the script before sending to TTS.
  */
 export async function textToSpeech(text: string): Promise<TTSResult> {
   const config = await getElevenLabsConfig()
@@ -184,11 +236,22 @@ export async function textToSpeech(text: string): Promise<TTSResult> {
     throw new Error("Keine ElevenLabs Voice-ID konfiguriert. Bitte in den Einstellungen hinterlegen.")
   }
 
+  // Clean script: remove formatting artifacts, keep only spoken text
+  const speakerNames = [config.voiceName1]
+  if (config.voiceName2) speakerNames.push(config.voiceName2)
+  const cleanedText = cleanScriptForTTS(text, speakerNames)
+
+  // For single voice, also strip any remaining [Name] markers
+  const strippedText = cleanedText.replace(
+    new RegExp(`\\[(?:${speakerNames.map(escapeRegex).join("|")})\\]\\s*`, "gi"),
+    ""
+  )
+
   const audioBuffer = await generateSegmentAudio(
     config.apiKey,
     config.voiceId1,
     config.model,
-    text
+    strippedText
   )
 
   return { audioBuffer, contentType: "audio/mpeg" }
@@ -196,8 +259,8 @@ export async function textToSpeech(text: string): Promise<TTSResult> {
 
 /**
  * Generate audio for a multi-voice script.
- * Parses speaker markers and generates each segment with the appropriate voice.
- * MP3 segments are concatenated (MP3 is frame-based, so concatenation works).
+ * Cleans the script, parses speaker markers, and generates each segment
+ * with the appropriate voice. MP3 segments are concatenated.
  */
 export async function multiVoiceTextToSpeech(content: string): Promise<TTSResult> {
   const config = await getElevenLabsConfig()
@@ -220,7 +283,10 @@ export async function multiVoiceTextToSpeech(content: string): Promise<TTSResult
   const speakerNames = [config.voiceName1]
   if (config.voiceName2) speakerNames.push(config.voiceName2)
 
-  const segments = parseScriptSegments(content, speakerNames)
+  // Clean the script before parsing
+  const cleanedContent = cleanScriptForTTS(content, speakerNames)
+
+  const segments = parseScriptSegments(cleanedContent, speakerNames)
 
   if (segments.length === 0) {
     throw new Error("Skript enthielt keinen Text zum Vertonen.")

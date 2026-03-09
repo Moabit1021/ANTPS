@@ -24,8 +24,13 @@ Format des Skripts:
 - Die Sprecher stellen sich NICHT namentlich vor
 - Gliedere in Abschnitte mit klaren Uebergaengen
 - Schliesse mit einer Zusammenfassung und Verabschiedung
-- Verwende KEINE Markdown-Formatierung im Skript selbst
-- Schreibe den Text so, wie er vorgelesen werden soll
+
+KRITISCH - Formatierungsregeln (das Skript wird direkt an eine Text-to-Speech-Engine gesendet):
+- Verwende KEINERLEI Markdown-Formatierung (kein **, kein *, kein #, kein ---, keine Aufzaehlungszeichen)
+- Schreibe KEINE Regieanweisungen, Abschnittstitel oder Ueberschriften (kein "HAUPTTEIL", "EINLEITUNG", "ABSCHLUSS" etc.)
+- Schreibe NUR Text, der tatsaechlich laut vorgelesen werden soll
+- Die EINZIGE erlaubte Formatierung sind die Sprecher-Markierungen in eckigen Klammern (z.B. [Name])
+- Alles, was du schreibst, wird woertlich vorgelesen - schreibe nichts, was nicht gesprochen werden soll
 
 Antwortformat:
 Beginne deine Antwort IMMER mit genau drei Zeilen fuer Metadaten, gefolgt von einer Leerzeile und dann dem Skript:
@@ -34,13 +39,17 @@ BESCHREIBUNG: [2-3 Saetze Zusammenfassung fuer die Episodenbeschreibung]
 ---
 [Hier folgt das eigentliche Podcast-Skript]`
 
-const SPEAKER_MODE_MONOLOG = `- Format: MONOLOG mit einem Sprecher ({{voice_name_1}})
-- Markiere den Sprecher mit [{{voice_name_1}}] am Anfang jedes Absatzes`
+const SPEAKER_MODE_MONOLOG = `- Format: MONOLOG mit einem einzigen Sprecher
+- Markiere JEDEN Absatz mit [{{voice_name_1}}] am Anfang
+- Verwende AUSSCHLIESSLICH den Namen {{voice_name_1}} - keine anderen Namen oder Bezeichnungen`
 
-const SPEAKER_MODE_DIALOG = `- Format: DIALOG zwischen zwei Sprechern ({{voice_name_1}} und {{voice_name_2}})
+const SPEAKER_MODE_DIALOG = `- Format: DIALOG zwischen genau zwei Sprechern
+- Die Sprecher heissen: {{voice_name_1}} und {{voice_name_2}} - verwende EXAKT diese Namen, keine anderen
 - {{voice_name_1}} moderiert und fuehrt durch die Themen
 - {{voice_name_2}} ergaenzt mit Einordnungen, Fragen und Kommentaren
-- Markiere jeden Sprecherwechsel mit [{{voice_name_1}}] oder [{{voice_name_2}}] am Anfang des Absatzes
+- Markiere JEDEN Sprecherwechsel mit [{{voice_name_1}}] oder [{{voice_name_2}}] am Anfang des Absatzes
+- Verwende NUR diese exakten Markierungen: [{{voice_name_1}}] und [{{voice_name_2}}]
+- Verwende NIEMALS andere Formate wie "Name:", "**Name**", "Mann:", "Frau:" etc.
 - Gestalte den Dialog natuerlich, nicht wie ein Interview`
 
 const DEFAULT_USER_TEMPLATE = `Erstelle ein Podcast-Skript basierend auf den folgenden Quellen:
