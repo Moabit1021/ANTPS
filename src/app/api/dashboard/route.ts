@@ -1,18 +1,23 @@
-import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { NextRequest, NextResponse } from "next/server"
+import { requireAuth, userScope } from "@/lib/auth-api"
 import { prisma } from "@/lib/prisma"
 
 export const dynamic = "force-dynamic"
 
-export async function GET() {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 })
+export async function GET(request: NextRequest) {
+  const { user, error } = await requireAuth(request)
+  if (error) {
+    return NextResponse.json({ error: error.error }, { status: error.status })
   }
 
+  const scope = userScope(user)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
+
+  const sourceWhere = { ...scope }
+  const scriptWhere = scope.userId ? { userId: scope.userId } : {}
+  const audioWhere = scope.userId ? { userId: scope.userId } : {}
+  const episodeWhere = scope.userId ? { userId: scope.userId } : {}
 
   const [
     newSourcesToday,
@@ -22,29 +27,34 @@ export async function GET() {
     totalAudio,
     publishedEpisodes,
     totalEpisodes,
+    totalAutomations,
     recentSources,
     recentScripts,
     recentAudio,
     recentEpisodes,
   ] = await Promise.all([
-    prisma.source.count({ where: { createdAt: { gte: today } } }),
-    prisma.source.count(),
-    prisma.podcastScript.count({ where: { status: { in: ["DRAFT", "REVISING"] } } }),
-    prisma.podcastScript.count(),
-    prisma.podcastAudio.count({ where: { status: "COMPLETED" } }),
-    prisma.podcastEpisode.count({ where: { status: "PUBLISHED" } }),
-    prisma.podcastEpisode.count(),
+    prisma.source.count({ where: { ...sourceWhere, createdAt: { gte: today } } }),
+    prisma.source.count({ where: sourceWhere }),
+    prisma.podcastScript.count({ where: { ...scriptWhere, status: { in: ["DRAFT", "REVISING"] } } }),
+    prisma.podcastScript.count({ where: scriptWhere }),
+    prisma.podcastAudio.count({ where: { ...audioWhere, status: "COMPLETED" } }),
+    prisma.podcastEpisode.count({ where: { ...episodeWhere, status: "PUBLISHED" } }),
+    prisma.podcastEpisode.count({ where: episodeWhere }),
+    prisma.automationRule.count({ where: scope.userId ? { userId: scope.userId, isActive: true } : { isActive: true } }),
     prisma.source.findMany({
+      where: sourceWhere,
       select: { id: true, title: true, type: true, createdAt: true },
       orderBy: { createdAt: "desc" },
       take: 5,
     }),
     prisma.podcastScript.findMany({
+      where: scriptWhere,
       select: { id: true, title: true, status: true, createdAt: true },
       orderBy: { createdAt: "desc" },
       take: 5,
     }),
     prisma.podcastAudio.findMany({
+      where: audioWhere,
       select: {
         id: true,
         fileName: true,
@@ -56,6 +66,7 @@ export async function GET() {
       take: 5,
     }),
     prisma.podcastEpisode.findMany({
+      where: episodeWhere,
       select: { id: true, title: true, status: true, publishedAt: true, createdAt: true },
       orderBy: { createdAt: "desc" },
       take: 5,
@@ -114,6 +125,7 @@ export async function GET() {
       totalAudio,
       publishedEpisodes,
       totalEpisodes,
+      totalAutomations,
     },
     activities: activities.slice(0, 10),
   })

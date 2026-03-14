@@ -42,6 +42,10 @@ interface Settings {
   smtp_from_email: string
   smtp_from_name: string
   smtp_secure: string
+  openai_api_key: string
+  openai_api_key_masked: string
+  openai_api_key_set: string
+  inbox_domain: string
 }
 
 interface VoiceInfo {
@@ -307,6 +311,7 @@ export default function SettingsPage() {
           <TabsTrigger value="tts">Sprachsynthese</TabsTrigger>
           <TabsTrigger value="feed">Podcast-Feed</TabsTrigger>
           <TabsTrigger value="smtp">E-Mail (SMTP)</TabsTrigger>
+          <TabsTrigger value="embeddings">Embeddings</TabsTrigger>
         </TabsList>
 
         {/* LLM Configuration Tab */}
@@ -830,6 +835,62 @@ export default function SettingsPage() {
                   )}
                   Verbindung testen
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Embeddings & Inbox Tab */}
+        <TabsContent value="embeddings" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>OpenAI Embeddings</CardTitle>
+              <CardDescription>
+                API-Schluessel fuer die semantische Suche (Themensuche ueber Newsletter).
+                Verwendet das Modell text-embedding-3-small.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="openai_api_key">OpenAI API Key</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="openai_api_key"
+                    type="password"
+                    value={settings!.openai_api_key}
+                    onChange={(e) => setSettings({ ...settings!, openai_api_key: e.target.value })}
+                    placeholder={settings!.openai_api_key_set === "true" ? settings!.openai_api_key_masked : "sk-..."}
+                  />
+                </div>
+                {settings!.openai_api_key_set === "true" && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Aktuell: {settings!.openai_api_key_masked}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Inbound E-Mail</CardTitle>
+              <CardDescription>
+                Domain fuer die persoenlichen E-Mail-Adressen der Benutzer.
+                Benutzer koennen Newsletter an ihre persoenliche Adresse weiterleiten.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="inbox_domain">Inbox-Domain</Label>
+                <Input
+                  id="inbox_domain"
+                  value={settings!.inbox_domain || ""}
+                  onChange={(e) => setSettings({ ...settings!, inbox_domain: e.target.value })}
+                  placeholder="inbox.podbriefapp.com"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Benutzer erhalten Adressen wie u-abc123@{settings!.inbox_domain || "inbox.podbriefapp.com"}
+                </p>
               </div>
             </CardContent>
           </Card>

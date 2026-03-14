@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { requireAuth } from "@/lib/auth-api"
 import { prisma } from "@/lib/prisma"
 import { multiVoiceTextToSpeech } from "@/lib/elevenlabs"
 import { writeFile, mkdir } from "fs/promises"
@@ -9,9 +8,9 @@ import path from "path"
 export const dynamic = "force-dynamic"
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 })
+  const { user, error } = await requireAuth(request)
+  if (error) {
+    return NextResponse.json({ error: error.error }, { status: error.status })
   }
 
   const body = await request.json()
@@ -27,6 +26,11 @@ export async function POST(request: NextRequest) {
 
   if (!script) {
     return NextResponse.json({ error: "Skript nicht gefunden." }, { status: 404 })
+  }
+
+  // Check ownership for non-admins
+  if (user.role !== "ADMIN" && script.userId && script.userId !== user.id) {
+    return NextResponse.json({ error: "Keine Berechtigung" }, { status: 403 })
   }
 
   if (!script.content.trim()) {
@@ -72,6 +76,7 @@ export async function POST(request: NextRequest) {
         voiceKimId: configMap.elevenlabs_voice_id_2 || "",
         modelId: configMap.elevenlabs_model || "eleven_multilingual_v2",
         status: "COMPLETED",
+        userId: user.id,
       },
       include: {
         script: { select: { id: true, title: true } },

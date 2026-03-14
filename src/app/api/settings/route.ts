@@ -25,6 +25,8 @@ const SETTING_KEYS = [
   "smtp_from_email",     // From email address
   "smtp_from_name",      // From display name
   "smtp_secure",         // Use SSL/TLS ("true" | "false")
+  "openai_api_key",      // OpenAI API key (for embeddings)
+  "inbox_domain",        // Domain for inbound email addresses
 ] as const
 
 // Defaults
@@ -97,7 +99,7 @@ export async function GET() {
   }
 
   // Mask API keys and passwords for security
-  const secretKeys = ["llm_api_key", "elevenlabs_api_key", "smtp_pass"] as const
+  const secretKeys = ["llm_api_key", "elevenlabs_api_key", "smtp_pass", "openai_api_key"] as const
   for (const keyName of secretKeys) {
     if (result[keyName]) {
       const val = result[keyName]

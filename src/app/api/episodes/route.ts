@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { requireAuth, userScope } from "@/lib/auth-api"
 import { prisma } from "@/lib/prisma"
 
 export const dynamic = "force-dynamic"
 
 // GET - List episodes
 export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 })
+  const { user, error } = await requireAuth(request)
+  if (error) {
+    return NextResponse.json({ error: error.error }, { status: error.status })
   }
 
   const { searchParams } = request.nextUrl
@@ -17,7 +16,9 @@ export async function GET(request: NextRequest) {
   const limit = parseInt(searchParams.get("limit") || "50")
   const offset = parseInt(searchParams.get("offset") || "0")
 
-  const where = status ? { status: status as "DRAFT" | "PUBLISHED" | "UNPUBLISHED" } : {}
+  const scope = userScope(user)
+  const where: Record<string, unknown> = { ...scope }
+  if (status) where.status = status as "DRAFT" | "PUBLISHED" | "UNPUBLISHED"
 
   const [episodes, total] = await Promise.all([
     prisma.podcastEpisode.findMany({
@@ -41,9 +42,9 @@ export async function GET(request: NextRequest) {
 
 // POST - Create episode from audio
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 })
+  const { user, error } = await requireAuth(request)
+  if (error) {
+    return NextResponse.json({ error: error.error }, { status: error.status })
   }
 
   const body = await request.json()
@@ -63,6 +64,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Audio nicht gefunden" }, { status: 404 })
   }
 
+  // Check ownership for non-admins
+  if (user.role !== "ADMIN" && audio.userId && audio.userId !== user.id) {
+    return NextResponse.json({ error: "Keine Berechtigung" }, { status: 403 })
+  }
+
   if (audio.episode) {
     return NextResponse.json({ error: "Dieses Audio hat bereits eine Episode" }, { status: 409 })
   }
@@ -79,6 +85,7 @@ export async function POST(request: NextRequest) {
       title: title || audio.script.title || `Episode ${episodeNumber}`,
       description: description || "",
       episodeNumber,
+      userId: user.id,
     },
     include: {
       audio: {

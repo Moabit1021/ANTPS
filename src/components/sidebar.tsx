@@ -15,6 +15,9 @@ import {
   Menu,
   X,
   ShieldCheck,
+  Inbox,
+  Zap,
+  Search,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -30,10 +33,13 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/inbox", label: "Mein Postfach", icon: Inbox },
+  { href: "/search", label: "Themensuche", icon: Search },
   { href: "/sources", label: "Quellen", icon: FileText },
   { href: "/scripts", label: "Skripte", icon: ScrollText },
   { href: "/audio", label: "Audio", icon: Headphones },
   { href: "/episodes", label: "Episoden", icon: Radio },
+  { href: "/automations", label: "Automationen", icon: Zap },
   { href: "/subscribers", label: "Abonnenten", icon: Users, adminOnly: true },
   { href: "/users", label: "Benutzer", icon: ShieldCheck, adminOnly: true },
   { href: "/settings", label: "Einstellungen", icon: Settings, adminOnly: true },

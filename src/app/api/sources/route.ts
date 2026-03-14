@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { requireAuth, userScope } from "@/lib/auth-api"
 import { prisma } from "@/lib/prisma"
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const { user, error } = await requireAuth(req)
+    if (error) {
+      return NextResponse.json({ error: error.error }, { status: error.status })
     }
 
     const { searchParams } = req.nextUrl
@@ -16,10 +15,13 @@ export async function GET(req: NextRequest) {
     const type = searchParams.get("type")
     const status = searchParams.get("status")
     const sort = searchParams.get("sort") === "asc" ? "asc" : "desc"
+    const sender = searchParams.get("sender")
 
-    const where: Record<string, string> = {}
+    const scope = userScope(user)
+    const where: Record<string, unknown> = { ...scope }
     if (type) where.type = type
     if (status) where.status = status
+    if (sender) where.senderEmail = sender
 
     const [sources, total] = await Promise.all([
       prisma.source.findMany({
@@ -40,9 +42,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const { user, error } = await requireAuth(req)
+    if (error) {
+      return NextResponse.json({ error: error.error }, { status: error.status })
     }
 
     const body = await req.json()
@@ -74,8 +76,19 @@ export async function POST(req: NextRequest) {
         summary: summary || null,
         filePath: filePath || null,
         receivedAt: receivedAt ? new Date(receivedAt) : new Date(),
+        userId: user.id,
       },
     })
+
+    // Generate embedding async
+    try {
+      const { embedSource } = await import("@/lib/embeddings")
+      embedSource(source.id).catch(err =>
+        console.error(`Embedding generation failed for ${source.id}:`, err)
+      )
+    } catch {
+      // Embedding generation is optional
+    }
 
     return NextResponse.json(source, { status: 201 })
   } catch (error) {

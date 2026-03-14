@@ -1,22 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { requireAuth, userScope } from "@/lib/auth-api"
 import { prisma } from "@/lib/prisma"
 
 export const dynamic = "force-dynamic"
 
 export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 })
+  const { user, error } = await requireAuth(request)
+  if (error) {
+    return NextResponse.json({ error: error.error }, { status: error.status })
   }
 
   const { searchParams } = request.nextUrl
   const page = Math.max(1, Number(searchParams.get("page")) || 1)
   const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit")) || 20))
 
+  const scope = userScope(user)
+  const where = scope.userId ? { userId: scope.userId } : {}
+
   const [audios, total] = await Promise.all([
     prisma.podcastAudio.findMany({
+      where,
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,
@@ -25,7 +28,7 @@ export async function GET(request: NextRequest) {
         episode: { select: { id: true } },
       },
     }),
-    prisma.podcastAudio.count(),
+    prisma.podcastAudio.count({ where }),
   ])
 
   return NextResponse.json({ audios, total, page, limit })

@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { requireAuth } from "@/lib/auth-api"
 import { prisma } from "@/lib/prisma"
 import { generateScript } from "@/lib/llm"
 
 export const dynamic = "force-dynamic"
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 })
+  const { user, error } = await requireAuth(request)
+  if (error) {
+    return NextResponse.json({ error: error.error }, { status: error.status })
   }
 
   const body = await request.json()
@@ -36,9 +35,12 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Fetch sources
+  // Fetch sources (scoped to user for non-admins)
   const sources = await prisma.source.findMany({
-    where: { id: { in: sourceIds } },
+    where: {
+      id: { in: sourceIds },
+      ...(user.role !== "ADMIN" ? { userId: user.id } : {}),
+    },
   })
 
   if (sources.length === 0) {
@@ -58,6 +60,7 @@ export async function POST(request: NextRequest) {
       title: scriptTitle,
       content: "",
       status: "GENERATING",
+      userId: user.id,
       config: {
         speakers: speakers || 2,
         duration: duration || 10,

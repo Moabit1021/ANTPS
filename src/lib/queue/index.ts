@@ -11,3 +11,5 @@ export const scriptGenerationQueue = new Queue("script-generation", { connection
 export const scriptRevisionQueue = new Queue("script-revision", { connection })
 export const audioGenerationQueue = new Queue("audio-generation", { connection })
 export const feedRegenerationQueue = new Queue("feed-regeneration", { connection })
+export const automationQueue = new Queue("automation-run", { connection })
+export const embeddingQueue = new Queue("embedding-generation", { connection })
