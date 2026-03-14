@@ -78,6 +78,18 @@ function chunkText(text: string): string[] {
 /**
  * Generate and store embeddings for a source.
  */
+/**
+ * Check if pgvector is available in the database.
+ */
+async function isPgvectorAvailable(): Promise<boolean> {
+  try {
+    await prisma.$queryRawUnsafe(`SELECT 1 FROM pg_extension WHERE extname = 'vector'`)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export async function embedSource(sourceId: string): Promise<number> {
   const source = await prisma.source.findUnique({
     where: { id: sourceId },
@@ -85,6 +97,12 @@ export async function embedSource(sourceId: string): Promise<number> {
   })
 
   if (!source) throw new Error(`Source ${sourceId} nicht gefunden`)
+
+  // Check if pgvector is available
+  if (!(await isPgvectorAvailable())) {
+    console.warn("[Embeddings] pgvector not available, skipping embedding generation")
+    return 0
+  }
 
   // Delete existing embeddings
   await prisma.sourceEmbedding.deleteMany({ where: { sourceId } })
@@ -134,6 +152,11 @@ export async function searchSources(
   similarity: number
   matchedChunk: string
 }>> {
+  // Check if pgvector is available
+  if (!(await isPgvectorAvailable())) {
+    throw new Error("Semantische Suche nicht verfuegbar. pgvector Extension muss in PostgreSQL installiert werden.")
+  }
+
   const result = await generateEmbedding(query)
   const vectorStr = `[${result.embedding.join(",")}]`
 
